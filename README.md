@@ -1,1 +1,0 @@
-# TP-Sistemas-Operativos-2C2025
