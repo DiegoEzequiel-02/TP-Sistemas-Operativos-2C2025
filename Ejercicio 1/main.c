@@ -31,15 +31,25 @@ const char *apellidos[] = {"Perez", "Gomez", "Lopez", "Diaz", "Fernandez"};
 const char *carreras[] = {"Ingenieria", "Medicina", "Derecho", "Arquitectura", "Economia"};
 
 // Semáforo: 0 = generador puede escribir, 1 = coordinador puede leer
+/*Bloquea el proceso hasta que el semáforo num del conjunto semid 
+tenga valor mayor a cero, y luego lo decrementa. 
+Se usa para sincronización entre procesos*/
 void sem_wait(int semid, int num) {
     struct sembuf op = {num, -1, 0};
     semop(semid, &op, 1);
 }
+
+/*Incrementa el semáforo num del conjunto semid, 
+permitiendo que otro proceso continúe. 
+Es la operación opuesta a sem_wait.*/
 void sem_signal(int semid, int num) {
     struct sembuf op = {num, 1, 0};
     semop(semid, &op, 1);
 }
 
+/*Llena la estructura Registro con datos aleatorios 
+(id, dni, nombre, apellido, carrera y materias). 
+Simula la generación de un registro de alumno.*/
 void generar_registro(Registro *reg, int id) {
     reg->id = id;
     reg->dni = 30000000 + rand() % 20000000;
@@ -49,6 +59,12 @@ void generar_registro(Registro *reg, int id) {
     reg->materias = rand() % 40;
 }
 
+/*Proceso hijo que genera cantidad registros. Por cada registro:
+
+    Espera permiso del semáforo para escribir.
+    Genera el registro y lo escribe en memoria compartida.
+    Señala al coordinador que hay un registro listo. Al terminar, se desconecta de la memoria compartida y finaliza.
+*/
 void generador(int shm_id, int sem_id, int inicio_id, int cantidad) {
     Registro *reg = (Registro *)shmat(shm_id, NULL, 0);
     srand(getpid());
@@ -61,6 +77,14 @@ void generador(int shm_id, int sem_id, int inicio_id, int cantidad) {
     exit(0);
 }
 
+/*Proceso hijo que recibe los registros generados:
+
+    Abre el archivo alumnos.csv y escribe el encabezado.
+    Por cada registro:
+        Espera que el generador lo escriba (semáforo).
+        Lo lee de memoria compartida y lo guarda en el CSV.
+        Señala al generador que puede escribir el siguiente. Al terminar, cierra el archivo y la memoria compartida.
+*/
 void coordinador(int shm_id, int sem_id, int total_registros, int generadores) {
     FILE *csv = fopen("alumnos.csv", "w");
     fprintf(csv, "ID,DNI,Nombre,Apellido,Carrera,Materias\n");
@@ -79,6 +103,14 @@ void coordinador(int shm_id, int sem_id, int total_registros, int generadores) {
     fclose(csv);
 }
 
+/*
+    Valida los argumentos (cantidad de generadores y registros).
+    Crea memoria compartida y semáforos.
+    Lanza el proceso coordinador y los procesos generadores.
+    Espera que todos los procesos terminen.
+    Libera recursos (memoria y semáforos).
+    Informa que la generación terminó.
+*/
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         printf("Uso: %s <generadores> <total_registros>\n", argv[0]);
