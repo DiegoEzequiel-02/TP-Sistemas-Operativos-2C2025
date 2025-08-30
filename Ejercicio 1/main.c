@@ -1,3 +1,7 @@
+//Para ejecutar, gcc Ejercicio 1/main.c - o alumnos && ./alumnos 5 50   
+//(5 generadores, 50 registros en total)
+//El archivo alumnos.csv se genera en el mismo directorio del ejecutable
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,7 +24,6 @@ typedef struct {
     char apellido[32];
     char carrera[32];
     int materias;
-    int listo; // 1 si el registro está listo para ser leído
 } Registro;
 
 const char *nombres[] = {"Juan", "Ana", "Luis", "Maria", "Pedro"};
@@ -44,7 +47,6 @@ void generar_registro(Registro *reg, int id) {
     strcpy(reg->apellido, apellidos[rand() % 5]);
     strcpy(reg->carrera, carreras[rand() % 5]);
     reg->materias = rand() % 40;
-    reg->listo = 1;
 }
 
 void generador(int shm_id, int sem_id, int inicio_id, int cantidad) {
@@ -67,12 +69,10 @@ void coordinador(int shm_id, int sem_id, int total_registros, int generadores) {
     int recibidos = 0;
     while (recibidos < total_registros) {
         sem_wait(sem_id, 1); // Espera registro listo
-        if (reg->listo) {
             fprintf(csv, "%d,%d,%s,%s,%s,%d\n",
                 reg->id, reg->dni, reg->nombre, reg->apellido, reg->carrera, reg->materias);
-            reg->listo = 0;
+
             recibidos++;
-        }
         sem_signal(sem_id, 0); // Permite escribir al generador
     }
     shmdt(reg);
