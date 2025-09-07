@@ -1,6 +1,6 @@
-//Para ejecutar, gcc "Ejercicio1/main.c" -o Ejercicio1/alumnos && ./alumnos 5 50   
+// Para ejecutar, gcc "Ejercicio1/main.c" -o Ejercicio1/alumnos && ./alumnos 5 50
 //(5 generadores, 50 registros en total)
-//El archivo alumnos.csv se genera en el mismo directorio del ejecutable
+// El archivo alumnos.csv se genera en el mismo directorio del ejecutable
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,12 +12,13 @@
 #include <sys/wait.h>
 #include <time.h>
 
-#define REGISTROS_POR_GENERADOR 10
-#define MAX_REGISTROS 1000
+// #define REGISTROS_POR_GENERADOR 10
+// #define MAX_REGISTROS 1000
 #define SHM_KEY 0x1234
 #define SEM_KEY 0x5678
 
-typedef struct {
+typedef struct
+{
     int id;
     int dni;
     char nombre[32];
@@ -31,26 +32,29 @@ const char *apellidos[] = {"Perez", "Gomez", "Lopez", "Diaz", "Fernandez"};
 const char *carreras[] = {"Ingenieria", "Medicina", "Derecho", "Arquitectura", "Economia"};
 
 // Semáforo: 0 = generador puede escribir, 1 = coordinador puede leer
-/*Bloquea el proceso hasta que el semáforo num del conjunto semid 
-tenga valor mayor a cero, y luego lo decrementa. 
+/*Bloquea el proceso hasta que el semáforo num del conjunto semid
+tenga valor mayor a cero, y luego lo decrementa.
 Se usa para sincronización entre procesos*/
-void sem_wait(int semid, int num) {
+void sem_wait(int semid, int num)
+{
     struct sembuf op = {num, -1, 0};
     semop(semid, &op, 1);
 }
 
-/*Incrementa el semáforo num del conjunto semid, 
-permitiendo que otro proceso continúe. 
+/*Incrementa el semáforo num del conjunto semid,
+permitiendo que otro proceso continúe.
 Es la operación opuesta a sem_wait.*/
-void sem_signal(int semid, int num) {
+void sem_signal(int semid, int num)
+{
     struct sembuf op = {num, 1, 0};
     semop(semid, &op, 1);
 }
 
-/*Llena la estructura Registro con datos aleatorios 
-(id, dni, nombre, apellido, carrera y materias). 
+/*Llena la estructura Registro con datos aleatorios
+(id, dni, nombre, apellido, carrera y materias).
 Simula la generación de un registro de alumno.*/
-void generar_registro(Registro *reg, int id) {
+void generar_registro(Registro *reg, int id)
+{
     reg->id = id;
     reg->dni = 30000000 + rand() % 20000000;
     strcpy(reg->nombre, nombres[rand() % 5]);
@@ -65,10 +69,12 @@ void generar_registro(Registro *reg, int id) {
     Genera el registro y lo escribe en memoria compartida.
     Señala al coordinador que hay un registro listo. Al terminar, se desconecta de la memoria compartida y finaliza.
 */
-void generador(int shm_id, int sem_id, int inicio_id, int cantidad) {
+void generador(int shm_id, int sem_id, int inicio_id, int cantidad)
+{
     Registro *reg = (Registro *)shmat(shm_id, NULL, 0);
     srand(getpid());
-    for (int i = 0; i < cantidad; i++) {
+    for (int i = 0; i < cantidad; i++)
+    {
         sem_wait(sem_id, 0); // Espera permiso para escribir
         generar_registro(reg, inicio_id + i);
         sem_signal(sem_id, 1); // Señala que hay registro listo
@@ -85,18 +91,20 @@ void generador(int shm_id, int sem_id, int inicio_id, int cantidad) {
         Lo lee de memoria compartida y lo guarda en el CSV.
         Señala al generador que puede escribir el siguiente. Al terminar, cierra el archivo y la memoria compartida.
 */
-void coordinador(int shm_id, int sem_id, int total_registros, int generadores) {
+void coordinador(int shm_id, int sem_id, int total_registros, int generadores)
+{
     FILE *csv = fopen("./Ejercicio1/alumnos.csv", "w");
     fprintf(csv, "ID,DNI,Nombre,Apellido,Carrera,Materias\n");
 
     Registro *reg = (Registro *)shmat(shm_id, NULL, 0);
     int recibidos = 0;
-    while (recibidos < total_registros) {
+    while (recibidos < total_registros)
+    {
         sem_wait(sem_id, 1); // Espera registro listo
-            fprintf(csv, "%d,%d,%s,%s,%s,%d\n",
+        fprintf(csv, "%d,%d,%s,%s,%s,%d\n",
                 reg->id, reg->dni, reg->nombre, reg->apellido, reg->carrera, reg->materias);
 
-            recibidos++;
+        recibidos++;
         sem_signal(sem_id, 0); // Permite escribir al generador
     }
     shmdt(reg);
@@ -111,14 +119,18 @@ void coordinador(int shm_id, int sem_id, int total_registros, int generadores) {
     Libera recursos (memoria y semáforos).
     Informa que la generación terminó.
 */
-int main(int argc, char *argv[]) {
-    if (argc != 3) {
+int main(int argc, char *argv[])
+{
+    if (argc != 3)
+    {
         printf("Uso: %s <generadores> <total_registros>\n", argv[0]);
         return 1;
     }
     int generadores = atoi(argv[1]);
     int total_registros = atoi(argv[2]);
-    if (generadores <= 0 || total_registros <= 0 || total_registros % generadores != 0) {
+    // if (generadores <= 0 || total_registros <= 0 || total_registros % generadores != 0)
+    if (generadores <= 0 || total_registros <= 0)
+    {
         printf("Parámetros inválidos. total_registros debe ser múltiplo de generadores.\n");
         return 1;
     }
@@ -129,22 +141,59 @@ int main(int argc, char *argv[]) {
     semctl(sem_id, 1, SETVAL, 0); // Coordinador espera
 
     pid_t coord_pid = fork();
-    if (coord_pid == 0) {
+    if (coord_pid == 0)
+    {
         coordinador(shm_id, sem_id, total_registros, generadores);
         exit(0);
     }
 
-    int registros_por_gen = total_registros / generadores;
-    int id_actual = 1;
-    for (int i = 0; i < generadores; i++) {
-        pid_t gen_pid = fork();
-        if (gen_pid == 0) {
-            generador(shm_id, sem_id, id_actual, registros_por_gen);
-        }
-        id_actual += registros_por_gen;
-    }
+    // int registros_por_gen = total_registros / generadores;
+    // int val = total_registros / generadores;
+    // int registros_por_gen = (val < 10) ? val : 10;
+    // int id_actual = 1;
+    // for (int i = 0; i < generadores; i++) {
+    //     pid_t gen_pid = fork();
+    //     if (gen_pid == 0) {
+    //         generador(shm_id, sem_id, id_actual, registros_por_gen);
+    //     }
+    //     id_actual += registros_por_gen;
+    // }
 
-    for (int i = 0; i < generadores + 1; i++) wait(NULL);
+    int id_actual = 1;
+    int aux_total = total_registros;
+    while(id_actual < total_registros){
+        if(aux_total < generadores){
+            for (int i = 0; i < aux_total; i++, id_actual++)
+                {
+                    pid_t gen_pid = fork();
+                    if (gen_pid == 0)
+                    {
+                        generador(shm_id, sem_id, id_actual, 1);
+                    }
+                }
+        } else {
+            int val = aux_total / generadores;
+            int base = (val < 10) ? val : 10;
+            for (int i = 0; i < generadores; i++)
+            {
+                pid_t gen_pid = fork();
+                if (gen_pid == 0)
+                {
+                    generador(shm_id, sem_id, id_actual, base);
+                }
+                id_actual += base;
+                aux_total -= base;
+            }
+        }
+    }
+    // Caso de que falte un registro
+    if(id_actual == total_registros){
+        pid_t gen_pid = fork();
+        if (gen_pid == 0)
+            generador(shm_id, sem_id, id_actual, 1);
+    }
+    for (int i = 0; i < generadores + 1; i++)
+        wait(NULL);
 
     shmctl(shm_id, IPC_RMID, NULL);
     semctl(sem_id, 0, IPC_RMID);
