@@ -129,6 +129,7 @@ int main(int argc, char *argv[])
     int generadores = atoi(argv[1]);
     int total_registros = atoi(argv[2]);
     // if (generadores <= 0 || total_registros <= 0 || total_registros % generadores != 0)
+    printf("%d|%d", generadores, total_registros);
     if (generadores <= 0 || total_registros <= 0)
     {
         printf("Parámetros inválidos. total_registros debe ser múltiplo de generadores.\n");
