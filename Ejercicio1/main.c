@@ -160,41 +160,23 @@ int main(int argc, char *argv[])
     //     id_actual += registros_por_gen;
     // }
 
+    // ...existing code...
+    int registros_por_gen = total_registros / generadores;
+    int resto = total_registros % generadores;
     int id_actual = 1;
-    int aux_total = total_registros;
-    while(id_actual < total_registros){
-        if(aux_total < generadores){
-            for (int i = 0; i < aux_total; i++, id_actual++)
-                {
-                    pid_t gen_pid = fork();
-                    if (gen_pid == 0)
-                    {
-                        generador(shm_id, sem_id, id_actual, 1);
-                    }
-                }
-        } else {
-            int val = aux_total / generadores;
-            int base = (val < 10) ? val : 10;
-            for (int i = 0; i < generadores; i++)
-            {
-                pid_t gen_pid = fork();
-                if (gen_pid == 0)
-                {
-                    generador(shm_id, sem_id, id_actual, base);
-                }
-                id_actual += base;
-                aux_total -= base;
-            }
-        }
-    }
-    // Caso de que falte un registro
-    if(id_actual == total_registros){
+
+    for (int i = 0; i < generadores; i++) {
+        int cantidad = registros_por_gen + (i < resto ? 1 : 0);
         pid_t gen_pid = fork();
-        if (gen_pid == 0)
-            generador(shm_id, sem_id, id_actual, 1);
+        if (gen_pid == 0) {
+            generador(shm_id, sem_id, id_actual, cantidad);
+        }
+        id_actual += cantidad;
     }
+
     for (int i = 0; i < generadores + 1; i++)
         wait(NULL);
+// ...existing code...
 
     shmctl(shm_id, IPC_RMID, NULL);
     semctl(sem_id, 0, IPC_RMID);
