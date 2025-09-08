@@ -121,7 +121,6 @@ void coordinador(int shm_id, int sem_id, int total_registros, int generadores)
 */
 int main(int argc, char *argv[])
 {
-    printf("Ingreso al programa y prueba del commit");
     if (argc != 3)
     {
         printf("Uso: %s <generadores> <total_registros>\n", argv[0]);
@@ -130,7 +129,7 @@ int main(int argc, char *argv[])
     int generadores = atoi(argv[1]);
     int total_registros = atoi(argv[2]);
     // if (generadores <= 0 || total_registros <= 0 || total_registros % generadores != 0)
-    printf("%d|%d", generadores, total_registros);
+    printf("Generadores: %d| Registros: %d\n", generadores, total_registros);
     if (generadores <= 0 || total_registros <= 0)
     {
         printf("Parámetros inválidos. total_registros debe ser múltiplo de generadores.\n");
