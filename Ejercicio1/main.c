@@ -121,6 +121,7 @@ void coordinador(int shm_id, int sem_id, int total_registros, int generadores)
 */
 int main(int argc, char *argv[])
 {
+    printf("Ingreso al programa y prueba del commit");
     if (argc != 3)
     {
         printf("Uso: %s <generadores> <total_registros>\n", argv[0]);
