@@ -1,51 +1,21 @@
-ID,DNI,Nombre,Apellido,Carrera,Materias
-21,48833665,Juan,Perez,Arquitectura,30
-22,47738792,Maria,Gomez,Derecho,5
-31,31648088,Maria,Diaz,Derecho,1
-23,33110069,Juan,Fernandez,Ingenieria,11
-24,48324806,Maria,Perez,Medicina,25
-25,43185266,Juan,Perez,Medicina,21
-1,38163682,Pedro,Diaz,Derecho,38
-26,35153266,Juan,Fernandez,Medicina,38
-11,45080666,Juan,Gomez,Arquitectura,0
-41,32274651,Juan,Gomez,Arquitectura,30
-32,42299689,Juan,Lopez,Arquitectura,29
-2,36794615,Pedro,Gomez,Ingenieria,32
-27,49294270,Ana,Diaz,Ingenieria,31
-12,49180606,Juan,Lopez,Medicina,29
-33,40331845,Pedro,Diaz,Economia,6
-3,47173735,Maria,Perez,Economia,13
-28,42109680,Juan,Perez,Derecho,32
-42,38322797,Ana,Fernandez,Medicina,36
-34,34125130,Maria,Diaz,Medicina,5
-13,41836263,Juan,Gomez,Economia,9
-4,32518206,Luis,Fernandez,Ingenieria,13
-29,41857640,Ana,Fernandez,Medicina,9
-43,35673206,Pedro,Perez,Derecho,38
-35,42061069,Pedro,Fernandez,Medicina,3
-14,38876296,Luis,Gomez,Medicina,36
-5,39408674,Pedro,Fernandez,Arquitectura,35
-30,30095645,Luis,Lopez,Derecho,15
-44,44903458,Luis,Lopez,Ingenieria,28
-36,45083421,Juan,Diaz,Medicina,24
-15,30985679,Luis,Lopez,Ingenieria,1
-6,32209425,Luis,Gomez,Arquitectura,7
-45,48609022,Maria,Perez,Arquitectura,39
-37,30265923,Ana,Fernandez,Arquitectura,14
-16,47878687,Pedro,Fernandez,Economia,25
-7,30825223,Maria,Diaz,Derecho,35
-46,31225846,Maria,Perez,Arquitectura,31
-38,34024635,Luis,Gomez,Arquitectura,35
-17,49840344,Juan,Lopez,Ingenieria,0
-8,49580281,Pedro,Perez,Economia,26
-47,35403852,Pedro,Lopez,Ingenieria,30
-39,41650357,Juan,Lopez,Medicina,11
-18,31193198,Pedro,Lopez,Derecho,5
-9,48445049,Pedro,Fernandez,Medicina,36
-40,35757333,Ana,Perez,Arquitectura,2
-48,35885302,Luis,Gomez,Arquitectura,15
-19,37981071,Juan,Lopez,Derecho,32
-10,48709500,Pedro,Perez,Economia,39
-49,30328539,Pedro,Lopez,Ingenieria,38
-20,48346143,Juan,Gomez,Economia,16
-50,38777495,Maria,Perez,Derecho,18
+ID  |DNI       |Nombre        |Apellido       |Carrera        |Materias|
+11  |38990172  |Luis           |Diaz           |Economia       |8       |
+12  |42495917  |Juan           |Gomez          |Arquitectura   |24      |
+1   |46753987  |Maria          |Lopez          |Economia       |12      |
+13  |33767209  |Juan           |Lopez          |Derecho        |16      |
+2   |46077828  |Luis           |Perez          |Arquitectura   |9       |
+14  |32717311  |Pedro          |Lopez          |Arquitectura   |0       |
+15  |33512368  |Juan           |Fernandez      |Ingenieria     |11      |
+3   |40429476  |Juan           |Fernandez      |Derecho        |28      |
+16  |34788136  |Juan           |Gomez          |Medicina       |5       |
+17  |31286408  |Juan           |Fernandez      |Arquitectura   |9       |
+4   |47387244  |Juan           |Gomez          |Arquitectura   |31      |
+18  |34728605  |Ana            |Lopez          |Medicina       |14      |
+5   |34950626  |Juan           |Perez          |Medicina       |25      |
+19  |36086406  |Juan           |Gomez          |Medicina       |34      |
+20  |48490285  |Luis           |Fernandez      |Derecho        |15      |
+6   |49546735  |Luis           |Gomez          |Economia       |26      |
+7   |39793416  |Maria          |Gomez          |Arquitectura   |22      |
+8   |44441513  |Maria          |Lopez          |Ingenieria     |11      |
+9   |42801841  |Pedro          |Diaz           |Ingenieria     |38      |
+10  |47550141  |Luis           |Perez          |Ingenieria     |7       |

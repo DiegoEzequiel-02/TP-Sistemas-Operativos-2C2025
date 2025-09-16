@@ -30,6 +30,7 @@ typedef struct
 const char *nombres[] = {"Juan", "Ana", "Luis", "Maria", "Pedro"};
 const char *apellidos[] = {"Perez", "Gomez", "Lopez", "Diaz", "Fernandez"};
 const char *carreras[] = {"Ingenieria", "Medicina", "Derecho", "Arquitectura", "Economia"};
+// int compMenorNum(int,int);
 
 // Semáforo: 0 = generador puede escribir, 1 = coordinador puede leer
 /*Bloquea el proceso hasta que el semáforo num del conjunto semid
@@ -83,6 +84,21 @@ void generador(int shm_id, int sem_id, int inicio_id, int cantidad)
     exit(0);
 }
 
+void generadorCopia(int shm_id, int sem_id, int inicio_id, int cantidad, int* id_actual)
+{
+    Registro *reg = (Registro *)shmat(shm_id, NULL, 0);
+    srand(getpid());
+    for (int i = 0; i < cantidad; i++)
+    {
+        sem_wait(sem_id, 0); // Espera permiso para escribir
+        generar_registro(reg, inicio_id + i);
+        *id_actual += 1;
+        sem_signal(sem_id, 1); // Señala que hay registro listo
+    }
+    shmdt(reg);
+    exit(0);
+}
+
 /*Proceso hijo que recibe los registros generados:
 
     Abre el archivo alumnos.csv y escribe el encabezado.
@@ -94,21 +110,24 @@ void generador(int shm_id, int sem_id, int inicio_id, int cantidad)
 void coordinador(int shm_id, int sem_id, int total_registros, int generadores)
 {
     FILE *csv = fopen("./Ejercicio1/alumnos.csv", "w");
-    fprintf(csv, "ID,DNI,Nombre,Apellido,Carrera,Materias\n");
+    fprintf(csv, "ID  |DNI       |Nombre        |Apellido       |Carrera        |Materias|\n");
 
     Registro *reg = (Registro *)shmat(shm_id, NULL, 0);
     int recibidos = 0;
     while (recibidos < total_registros)
     {
         sem_wait(sem_id, 1); // Espera registro listo
-        fprintf(csv, "%d,%d,%s,%s,%s,%d\n",
+        fprintf(csv, "%-4d|%-10d|%-15s|%-15s|%-15s|%-8d|\n",
                 reg->id, reg->dni, reg->nombre, reg->apellido, reg->carrera, reg->materias);
-
         recibidos++;
         sem_signal(sem_id, 0); // Permite escribir al generador
     }
     shmdt(reg);
     fclose(csv);
+}
+
+int compMenorNum(int num1, int num2){
+    return (num1 < num2) ? num1 : num2;
 }
 
 /*
@@ -148,18 +167,34 @@ int main(int argc, char *argv[])
     }
 
     // ...existing code...
-    int registros_por_gen = total_registros / generadores;
-    int resto = total_registros % generadores;
     int id_actual = 1;
-
-    for (int i = 0; i < generadores; i++) {
-        int cantidad = registros_por_gen + (i < resto ? 1 : 0);
-        pid_t gen_pid = fork();
-        if (gen_pid == 0) {
-            generador(shm_id, sem_id, id_actual, cantidad);
+    int intAux = total_registros;
+    while (id_actual < total_registros){
+        int registros_por_gen = compMenorNum(intAux / generadores, 10);
+        int resto = compMenorNum(intAux % generadores, generadores);
+        intAux -= registros_por_gen * generadores;
+        for(int i = 0; i < generadores; i++){
+            int cantidad = registros_por_gen + (i < resto ? 1 : 0);
+            pid_t gen_pid = fork();
+            if (cantidad != 0 && gen_pid == 0) {
+                generador(shm_id, sem_id, id_actual, cantidad);
+            }
+            id_actual += cantidad; 
         }
-        id_actual += cantidad;
+        //id_actual++; //Por si el codigo se ejecuta
     }
+    //id_actual = 1;
+    //int registros_por_gen = total_registros / generadores;
+    //int resto = total_registros % generadores;
+
+    //for (int i = 0; i < generadores; i++) {
+        //int cantidad = registros_por_gen + (i < resto ? 1 : 0);
+        //pid_t gen_pid = fork();
+        //if (gen_pid == 0) {
+            //generador(shm_id, sem_id, id_actual, cantidad);
+        //}
+        //id_actual += cantidad;
+    //}
 
     for (int i = 0; i < generadores + 1; i++)
         wait(NULL);
