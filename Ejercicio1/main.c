@@ -128,7 +128,6 @@ int main(int argc, char *argv[])
     }
     int generadores = atoi(argv[1]);
     int total_registros = atoi(argv[2]);
-    // if (generadores <= 0 || total_registros <= 0 || total_registros % generadores != 0)
     printf("Generadores: %d| Registros: %d\n", generadores, total_registros);
     if (generadores <= 0 || total_registros <= 0)
     {
@@ -147,18 +146,6 @@ int main(int argc, char *argv[])
         coordinador(shm_id, sem_id, total_registros, generadores);
         exit(0);
     }
-
-    // int registros_por_gen = total_registros / generadores;
-    // int val = total_registros / generadores;
-    // int registros_por_gen = (val < 10) ? val : 10;
-    // int id_actual = 1;
-    // for (int i = 0; i < generadores; i++) {
-    //     pid_t gen_pid = fork();
-    //     if (gen_pid == 0) {
-    //         generador(shm_id, sem_id, id_actual, registros_por_gen);
-    //     }
-    //     id_actual += registros_por_gen;
-    // }
 
     // ...existing code...
     int registros_por_gen = total_registros / generadores;
