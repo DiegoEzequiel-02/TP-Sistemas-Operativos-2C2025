@@ -1,34 +1,56 @@
 ID  |DNI       |Nombre         |Apellido       |Carrera        |Materias|
-1   |44403164  |Pedro          |Fernandez      |Derecho        |20      |
-2   |31331345  |Juan           |Gomez          |Economia       |20      |
-11  |37094208  |Ana            |Lopez          |Ingenieria     |20      |
-3   |43109238  |Maria          |Fernandez      |Ingenieria     |26      |
-12  |33242456  |Luis           |Perez          |Economia       |33      |
-4   |47365712  |Juan           |Perez          |Derecho        |12      |
-13  |44304362  |Luis           |Lopez          |Medicina       |5       |
-21  |31147445  |Luis           |Perez          |Economia       |2       |
-5   |42234590  |Pedro          |Lopez          |Ingenieria     |35      |
-14  |40360231  |Luis           |Gomez          |Derecho        |19      |
-32  |47395797  |Pedro          |Diaz           |Medicina       |31      |
-31  |41053045  |Ana            |Gomez          |Economia       |35      |
-6   |49534923  |Pedro          |Lopez          |Arquitectura   |28      |
-15  |30761278  |Pedro          |Diaz           |Economia       |23      |
-7   |43056804  |Pedro          |Lopez          |Ingenieria     |27      |
-16  |45855385  |Pedro          |Perez          |Medicina       |27      |
-22  |41317977  |Luis           |Gomez          |Arquitectura   |5       |
-8   |44255748  |Luis           |Lopez          |Medicina       |11      |
-17  |31212710  |Ana            |Diaz           |Derecho        |28      |
-23  |42751843  |Maria          |Lopez          |Derecho        |35      |
-9   |33293799  |Pedro          |Lopez          |Arquitectura   |24      |
-18  |31141154  |Juan           |Gomez          |Medicina       |10      |
-24  |39863746  |Juan           |Fernandez      |Derecho        |17      |
-10  |40813978  |Luis           |Lopez          |Arquitectura   |11      |
-19  |33927909  |Pedro          |Fernandez      |Arquitectura   |22      |
-25  |34294350  |Maria          |Gomez          |Ingenieria     |31      |
-33  |31048949  |Juan           |Fernandez      |Medicina       |8       |
-20  |36854359  |Pedro          |Fernandez      |Derecho        |4       |
-20  |36854359  |Pedro          |Fernandez      |Derecho        |4       |
-20  |36854359  |Pedro          |Fernandez      |Derecho        |4       |
-20  |36854359  |Pedro          |Fernandez      |Derecho        |4       |
-20  |36854359  |Pedro          |Fernandez      |Derecho        |4       |
-20  |36854359  |Pedro          |Fernandez      |Derecho        |4       |
+0001|45654857  |Pedro          |Perez          |Derecho        |30      |
+0002|31759905  |Ana            |Perez          |Medicina       |33      |
+0011|32773908  |Maria          |Gomez          |Derecho        |35      |
+0021|45325591  |Luis           |Fernandez      |Ingenieria     |25      |
+0031|30515179  |Maria          |Diaz           |Derecho        |39      |
+0041|43945283  |Pedro          |Diaz           |Derecho        |21      |
+0051|49310884  |Juan           |Diaz           |Medicina       |29      |
+0052|48691380  |Juan           |Perez          |Derecho        |4       |
+0053|45699886  |Maria          |Fernandez      |Economia       |35      |
+0054|44042451  |Maria          |Diaz           |Economia       |39      |
+0003|41999055  |Ana            |Fernandez      |Economia       |15      |
+0012|48861271  |Juan           |Fernandez      |Arquitectura   |29      |
+0022|34040127  |Pedro          |Perez          |Derecho        |28      |
+0032|46371824  |Pedro          |Perez          |Medicina       |38      |
+0042|44434405  |Ana            |Perez          |Derecho        |28      |
+0004|43423748  |Juan           |Fernandez      |Medicina       |3       |
+0013|33381853  |Maria          |Lopez          |Ingenieria     |28      |
+0023|32992057  |Pedro          |Perez          |Derecho        |6       |
+0033|38810016  |Luis           |Perez          |Arquitectura   |37      |
+0043|42188836  |Pedro          |Gomez          |Arquitectura   |5       |
+0005|46835866  |Pedro          |Gomez          |Ingenieria     |5       |
+0014|44688183  |Maria          |Perez          |Derecho        |20      |
+0024|42660575  |Maria          |Fernandez      |Economia       |6       |
+0034|37637181  |Pedro          |Diaz           |Medicina       |11      |
+0044|31442143  |Luis           |Diaz           |Arquitectura   |31      |
+0006|31016001  |Ana            |Perez          |Derecho        |21      |
+0015|41221795  |Luis           |Diaz           |Economia       |20      |
+0025|33891338  |Pedro          |Diaz           |Economia       |39      |
+0035|30478249  |Juan           |Perez          |Medicina       |23      |
+0045|47085303  |Maria          |Lopez          |Derecho        |13      |
+0007|34878111  |Ana            |Perez          |Medicina       |15      |
+0016|43101778  |Ana            |Perez          |Ingenieria     |21      |
+0026|31975828  |Ana            |Diaz           |Medicina       |32      |
+0036|35125878  |Maria          |Diaz           |Medicina       |5       |
+0046|35499506  |Luis           |Gomez          |Ingenieria     |12      |
+0008|49593183  |Maria          |Gomez          |Arquitectura   |29      |
+0017|38850685  |Maria          |Fernandez      |Economia       |32      |
+0027|48874638  |Pedro          |Fernandez      |Economia       |19      |
+0037|38545806  |Maria          |Diaz           |Economia       |0       |
+0047|35381638  |Juan           |Lopez          |Derecho        |19      |
+0009|34318529  |Juan           |Diaz           |Arquitectura   |20      |
+0018|36848879  |Juan           |Lopez          |Ingenieria     |34      |
+0028|46485776  |Ana            |Diaz           |Medicina       |1       |
+0038|30458330  |Pedro          |Gomez          |Ingenieria     |25      |
+0048|37617480  |Luis           |Gomez          |Derecho        |31      |
+0010|48705115  |Ana            |Perez          |Economia       |29      |
+0019|39121458  |Pedro          |Fernandez      |Ingenieria     |36      |
+0029|30083469  |Juan           |Lopez          |Medicina       |13      |
+0039|34948539  |Maria          |Lopez          |Economia       |21      |
+0049|42679551  |Juan           |Perez          |Derecho        |24      |
+0020|46614779  |Pedro          |Perez          |Economia       |28      |
+0030|38619078  |Luis           |Diaz           |Economia       |11      |
+0040|34721256  |Maria          |Gomez          |Medicina       |31      |
+0050|33459320  |Luis           |Diaz           |Arquitectura   |21      |
+0055|35314637  |Juan           |Diaz           |Ingenieria     |28      |
