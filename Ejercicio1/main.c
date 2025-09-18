@@ -1,3 +1,7 @@
+// Para ejecutar, gcc "Ejercicio1/main.c" -o Ejercicio1/alumnos && ./Ejercicio1/alumnos 5 50
+//(5 generadores, 50 registros en total)
+// El archivo alumnos.csv se genera en el mismo directorio del ejecutable
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
