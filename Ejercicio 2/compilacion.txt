@@ -1,0 +1,9 @@
+gcc main.c servidor.c transaccion.c csv.c utils.c -o servidor -lpthread
+gcc cliente.c -o cliente
+
+Opcional
+IP=127.0.0.1
+PUERTO=5000
+
+./servidor 127.0.0.1 5000
+./cliente 127.0.0.1 5000
