@@ -62,7 +62,7 @@ char* consultar_registro(int id) {
     static char respuesta[MAX_LINEA];
     for (int i = 0; i < total_registros; i++) {
         if (registros[i].activo && registros[i].id == id) {
-            snprintf(respuesta, sizeof(respuesta), "[✔] Registro: %s", registros[i].linea);
+            snprintf(respuesta, sizeof(respuesta), "[✔] Registro: %.200s", registros[i].linea);
             return respuesta;
         }
     }
