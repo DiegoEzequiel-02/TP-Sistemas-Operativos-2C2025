@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
                 printf("Ingrese los datos (DNI|Nombre|Apellido|Carrera|Materias):\n> ");
                 fgets(linea, sizeof(linea), stdin);
                 linea[strcspn(linea, "\n")] = 0;
-                snprintf(buffer, sizeof(buffer), "AGREGAR %s", linea);
+                snprintf(buffer, sizeof(buffer), "AGREGAR %.900s", linea);
                 send(sockfd, buffer, strlen(buffer), 0);
                 break;
             }
@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
                 printf("Nuevos datos (DNI|Nombre|Apellido|Carrera|Materias):\n> ");
                 fgets(datos, sizeof(datos), stdin);
                 datos[strcspn(datos, "\n")] = 0;
-                snprintf(buffer, sizeof(buffer), "MODIFICAR %d %s", id, datos);
+                snprintf(buffer, sizeof(buffer), "MODIFICAR %d %.900s", id, datos);
                 send(sockfd, buffer, strlen(buffer), 0);
                 break;
             }
