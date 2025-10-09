@@ -7,3 +7,11 @@ PUERTO=5000
 
 ./servidor 127.0.0.1 5000
 ./cliente 127.0.0.1 5000
+
+gcc -Wall -pthread -o servidor main.c servidor.c csv.c transaccion.c utils.c
+-Wall activa todos los warnings para ayudarte a detectar problemas.
+-pthread es necesario porque usas hilos (pthread).
+-o servidor indica que el ejecutable se llamará servidor.
+Si todo compila bien, tendrás un ejecutable llamado servidor.
+
+Falta que reciba los clientes concurrentes y en espera por parametro 

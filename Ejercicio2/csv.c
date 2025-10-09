@@ -3,18 +3,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_REGISTROS 1000
-#define MAX_LINEA 256
 #define CSV_PATH "./alumnos.csv"
 
-typedef struct {
-    int id;
-    char linea[MAX_LINEA];
-    int activo;
-} RegistroMem;
-
-RegistroMem registros[MAX_REGISTROS];
+Registro registros[MAX_REGISTROS];
 int total_registros = 0;
+
+void parse_linea_to_registro(const char* linea, Registro* reg) {
+    sscanf(linea, "%d|%31[^|]|%63[^|]|%63[^|]|%31[^|]|%127[^|]|",
+        &reg->id, reg->dni, reg->nombre, reg->apellido, reg->carrera, reg->materias);
+    reg->activo = 1;
+}
+
+void registro_to_linea(const Registro* reg, char* linea) {
+    snprintf(linea, MAX_LINEA, "%04d|%s|%s|%s|%s|%s|\n",
+        reg->id, reg->dni, reg->nombre, reg->apellido, reg->carrera, reg->materias);
+}
 
 void cargar_registros() {
     FILE* f = fopen(CSV_PATH, "r");
@@ -30,10 +33,7 @@ void cargar_registros() {
     while (fgets(linea, sizeof(linea), f)) {
         if (total_registros >= MAX_REGISTROS) break;
 
-        RegistroMem* reg = &registros[total_registros];
-        reg->activo = 1;
-        strcpy(reg->linea, linea);
-        sscanf(linea, "%d|", &reg->id);
+        parse_linea_to_registro(linea, &registros[total_registros]);
         total_registros++;
     }
 
@@ -49,9 +49,11 @@ void guardar_registros() {
 
     fprintf(f, "ID|DNI|Nombre|Apellido|Carrera|Materias|\n");
 
+    char linea[MAX_LINEA];
     for (int i = 0; i < total_registros; i++) {
         if (registros[i].activo) {
-            fprintf(f, "%s", registros[i].linea);
+            registro_to_linea(&registros[i], linea);
+            fprintf(f, "%s", linea);
         }
     }
 
@@ -62,7 +64,7 @@ char* consultar_registro(int id) {
     static char respuesta[MAX_LINEA];
     for (int i = 0; i < total_registros; i++) {
         if (registros[i].activo && registros[i].id == id) {
-            snprintf(respuesta, sizeof(respuesta), "[✔] Registro: %.200s", registros[i].linea);
+            registro_to_linea(&registros[i], respuesta);
             return respuesta;
         }
     }
@@ -72,11 +74,13 @@ char* consultar_registro(int id) {
 int agregar_registro(const char* linea_sin_id) {
     if (total_registros >= MAX_REGISTROS) return 0;
 
-    RegistroMem* reg = &registros[total_registros];
+    Registro* reg = &registros[total_registros];
     reg->id = (total_registros > 0) ? registros[total_registros - 1].id + 1 : 1;
     reg->activo = 1;
 
-    snprintf(reg->linea, sizeof(reg->linea), "%04d|%s\n", reg->id, linea_sin_id);
+    sscanf(linea_sin_id, "%31[^|]|%63[^|]|%63[^|]|%31[^|]|%127[^|]|",
+        reg->dni, reg->nombre, reg->apellido, reg->carrera, reg->materias);
+
     total_registros++;
 
     return 1;
@@ -92,10 +96,12 @@ int eliminar_registro(int id) {
     return 0;
 }
 
-int modificar_registro(int id, const char* nuevos_datos) {
+int modificar_registro(int id, const Registro* nuevos_datos) {
     for (int i = 0; i < total_registros; i++) {
         if (registros[i].activo && registros[i].id == id) {
-            snprintf(registros[i].linea, MAX_LINEA, "%04d|%s\n", id, nuevos_datos);
+            registros[i] = *nuevos_datos;
+            registros[i].id = id;
+            registros[i].activo = 1;
             return 1;
         }
     }

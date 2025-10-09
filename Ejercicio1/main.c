@@ -111,7 +111,7 @@ void coordinador(int shm_id, int sem_id, int total_registros) {
     while (recibidos < total_registros) {
         sem_wait(sem_id, 1);  // espera a que haya dato
         if (!regUsado(contRegs, idsUsados, dniUsados, reg)) {
-            fprintf(csv, "%04d|%-10d|%-15s|%-15s|%-15s|%-8d|\n",
+            fprintf(csv, "%4d|%-10d|%-15s|%-15s|%-15s|%-8d|\n",
                     reg->id, reg->dni, reg->nombre, reg->apellido, reg->carrera, reg->materias);
             fflush(csv);  // importante si hay fallos intermedios
             idsUsados[contRegs] = reg->id;
