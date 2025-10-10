@@ -26,6 +26,11 @@ typedef struct {
 extern t_alumnos alumnos[MAX_ALUMNOS];
 extern int cantidad_alumnos;
 
+typedef struct {
+    int sock;
+    int id;
+} cliente_info;
+
 // funciones
 void leer_alumnos_csv();
 void guardar_alumnos_csv();

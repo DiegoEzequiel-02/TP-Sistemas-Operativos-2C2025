@@ -150,7 +150,11 @@ void procesar_alta(int sock, const char* comando) {
 }
 
 void procesar_baja(int sock, const char* comando) {
-    int id = atoi(comando + 5); // "BAJA:ID="
+    int id;
+    if (sscanf(comando, "BAJA:ID=%d", &id) != 1) {
+        send(sock, "ERROR: formato de comando inválido\n", 34, 0);
+        return;
+    }
     int encontrado = 0;
     for (int i = 0; i < cantidad_alumnos; i++) {
         if (alumnos[i].ID == id) {

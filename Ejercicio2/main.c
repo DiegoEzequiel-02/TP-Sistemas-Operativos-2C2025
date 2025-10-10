@@ -1,12 +1,13 @@
 //COMPILAR: gcc main.c -o cliente
 //gcc servidor.c funcion.c -o servidor -lpthread
 //gcc cliente.c -o cliente
-
+//gcc main.c funcion.c -o cliente
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include "funcion.h"
 
 #define BUFFER 512
 
@@ -14,23 +15,33 @@ void enviar_comando(int sock, const char* comando) {
     char buffer[BUFFER];
     send(sock, comando, strlen(comando), 0);
 
-    memset(buffer, 0, BUFFER);
-    int n = recv(sock, buffer, BUFFER - 1, 0);
-    if (n > 0) {
-        buffer[n] = '\0';
-        printf("Servidor: %s\n", buffer);
+    if (strcmp(comando, "LISTAR") == 0) {
+        int n;
+        while ((n = recv(sock, buffer, BUFFER - 1, 0)) > 0) {
+            buffer[n] = '\0';
+            char* fin = strstr(buffer, "__FIN__");
+            if (fin) {
+                *fin = '\0'; // corta el buffer en el marcador
+                printf("%s", buffer);
+                break;
+            }
+            printf("%s", buffer);
+        }
+        printf("\n");
     } else {
-        printf("Servidor desconectado.\n");
-        exit(1);
+        int n = recv(sock, buffer, BUFFER - 1, 0);
+        if (n > 0) {
+            buffer[n] = '\0';
+            printf("%s", buffer);
+        }
     }
 }
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
-        printf("Uso: %s <IP servidor> <PUERTO>\n", argv[0]);
+        printf("Uso: %s <IP> <PUERTO> <N_concurrentes> <M_espera>\n", argv[0]);
         return 1;
     }
-
     char* ip = argv[1];
     int puerto = atoi(argv[2]);
 
@@ -64,6 +75,7 @@ int main(int argc, char* argv[]) {
         printf("4) BAJA\n");
         printf("5) MODIFICAR\n");
         printf("6) COMMIT TRANSACTION\n");
+        printf("7) LISTAR ALUMNOS\n");
         printf("0) SALIR\n");
         printf("Seleccione: ");
         scanf("%d", &opcion);
@@ -90,19 +102,61 @@ int main(int argc, char* argv[]) {
             case 3: {
                 int id, dni, materias;
                 char nombre[30], apellido[30], carrera[30];
-                printf("ID: "); scanf("%d", &id); getchar();
-                printf("DNI: "); scanf("%d", &dni); getchar();
-                printf("Nombre: "); fgets(nombre, sizeof(nombre), stdin);
-                nombre[strcspn(nombre, "\n")] = 0;
-                printf("Apellido: "); fgets(apellido, sizeof(apellido), stdin);
-                apellido[strcspn(apellido, "\n")] = 0;
-                printf("Carrera: "); fgets(carrera, sizeof(carrera), stdin);
-                carrera[strcspn(carrera, "\n")] = 0;
-                printf("Materias: "); scanf("%d", &materias); getchar();
+
+                // ID
+                do {
+                    printf("ID (número entero > 0): ");
+                    if (scanf("%d", &id) != 1 || id <= 0) {
+                        printf("Valor inválido. Intente nuevamente.\n");
+                        while (getchar() != '\n'); // limpiar buffer
+                    } else break;
+                } while (1);
+                while (getchar() != '\n'); // limpiar buffer
+
+                // DNI
+                do {
+                    printf("DNI (número entero > 0): ");
+                    if (scanf("%d", &dni) != 1 || dni <= 0) {
+                        printf("Valor inválido. Intente nuevamente.\n");
+                        while (getchar() != '\n');
+                    } else break;
+                } while (1);
+                while (getchar() != '\n');
+
+                // Nombre
+                do {
+                    printf("Nombre: ");
+                    fgets(nombre, sizeof(nombre), stdin);
+                    nombre[strcspn(nombre, "\n")] = 0;
+                } while (strlen(nombre) == 0);
+
+                // Apellido
+                do {
+                    printf("Apellido: ");
+                    fgets(apellido, sizeof(apellido), stdin);
+                    apellido[strcspn(apellido, "\n")] = 0;
+                } while (strlen(apellido) == 0);
+
+                // Carrera
+                do {
+                    printf("Carrera: ");
+                    fgets(carrera, sizeof(carrera), stdin);
+                    carrera[strcspn(carrera, "\n")] = 0;
+                } while (strlen(carrera) == 0);
+
+                // Materias
+                do {
+                    printf("Materias (número entero >= 0): ");
+                    if (scanf("%d", &materias) != 1 || materias < 0) {
+                        printf("Valor inválido. Intente nuevamente.\n");
+                        while (getchar() != '\n');
+                    } else break;
+                } while (1);
+                while (getchar() != '\n');
 
                 snprintf(comando, BUFFER,
-                         "ALTA:ID=%d,DNI=%d,NOMBRE=%s,APELLIDO=%s,CARRERA=%s,MATERIAS=%d",
-                         id, dni, nombre, apellido, carrera, materias);
+                    "ALTA:ID=%d,DNI=%d,NOMBRE=%s,APELLIDO=%s,CARRERA=%s,MATERIAS=%d",
+                    id, dni, nombre, apellido, carrera, materias);
                 enviar_comando(sock, comando);
                 break;
             }
@@ -134,6 +188,10 @@ int main(int argc, char* argv[]) {
 
             case 6:
                 enviar_comando(sock, "COMMIT TRANSACTION");
+                break;
+
+            case 7:
+                enviar_comando(sock, "LISTAR");
                 break;
 
             case 0:
