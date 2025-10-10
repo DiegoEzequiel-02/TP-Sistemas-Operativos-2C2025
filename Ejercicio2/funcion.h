@@ -2,16 +2,11 @@
 #define FUNCION_H
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <arpa/inet.h>
 
-#define MAX_ALUMNOS 100
+#define MAX_ALUMNOS 200
 #define MAX_LINEA 256
 #define BUFFER 512
+#define RUTA_CSV "../Ejercicio1/alumnos.csv"
 
 typedef struct {
     int ID;
@@ -20,23 +15,24 @@ typedef struct {
     char apellido[30];
     char carrera[30];
     int materias;
-} t_alumnos;
+} t_alumno;
 
-// variables globales
-extern t_alumnos alumnos[MAX_ALUMNOS];
+
+
+/* Datos en memoria (servidor) */
+extern t_alumno alumnos[MAX_ALUMNOS];
 extern int cantidad_alumnos;
 
-typedef struct {
-    int sock;
-    int id;
-} cliente_info;
-
-// funciones
+/* Funciones CSV / operaciones */
 void leer_alumnos_csv();
-void guardar_alumnos_csv();
-void procesar_consulta(int sock, const char* comando);
-void procesar_alta(int sock, const char* comando);
-void procesar_baja(int sock, const char* comando);
-void procesar_modificar(int sock, const char* comando);
+int guardar_alumnos_csv();
+
+/* Operaciones sobre arrays */
+int buscar_por_ID(t_alumno arr[], int cnt, int id); /* devuelve índice o -1 */
+void listar_a_buffer(t_alumno arr[], int cnt, char *out, size_t out_size);
+int alta_en_array(t_alumno arr[], int *cnt, t_alumno a);
+int baja_en_array(t_alumno arr[], int *cnt, int id);
+int modificar_en_array(t_alumno arr[], int cnt, int id, const char* campo, const char* valor);
+void consulta_por_campo(t_alumno arr[], int cnt, const char* campo, const char* valor, char* out, size_t out_size);
 
 #endif

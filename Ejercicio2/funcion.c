@@ -1,38 +1,21 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
-#include <unistd.h>
-#include <arpa/inet.h>
 #include "funcion.h"
+#include <string.h>
+#include <stdlib.h>
 
-#define MAX_ALUMNOS 100
-#define MAX_LINEA 256
-#define BUFFER 512
-
-t_alumnos alumnos[MAX_ALUMNOS];
+t_alumno alumnos[MAX_ALUMNOS];
 int cantidad_alumnos = 0;
 
-// Función auxiliar: comparación insensible a mayúsculas
-int strcmpi(const char *a, const char *b) {
-    while (*a && *b) {
-        if (tolower(*a) != tolower(*b)) return 0;
-        a++; b++;
-    }
-    return *a == *b;
-}
-
+/* Lee CSV a 'alumnos' (simple, asume formato: ID,DNI,NOMBRE,APELLIDO,CARRERA,MATERIAS) */
 void leer_alumnos_csv() {
-    FILE *archivo = fopen("../Ejercicio1/alumnos.csv", "r");
+    FILE *archivo = fopen(RUTA_CSV, "r");
     if (!archivo) {
-        perror("No se pudo abrir el archivo alumnos.csv");
+        perror("No se pudo abrir el archivo CSV");
         return;
     }
-
     char linea[MAX_LINEA];
     cantidad_alumnos = 0;
     while (fgets(linea, sizeof(linea), archivo) && cantidad_alumnos < MAX_ALUMNOS) {
-        t_alumnos a;
+        t_alumno a;
         char *token = strtok(linea, ",");
         if (token) a.ID = atoi(token);
 
@@ -40,13 +23,13 @@ void leer_alumnos_csv() {
         if (token) a.DNI = atoi(token);
 
         token = strtok(NULL, ",");
-        if (token) { strncpy(a.nombre, token, 30); a.nombre[strcspn(a.nombre, "\n")] = 0; }
+        if (token) strncpy(a.nombre, token, 29);
 
         token = strtok(NULL, ",");
-        if (token) { strncpy(a.apellido, token, 30); a.apellido[strcspn(a.apellido, "\n")] = 0; }
+        if (token) strncpy(a.apellido, token, 29);
 
         token = strtok(NULL, ",");
-        if (token) { strncpy(a.carrera, token, 30); a.carrera[strcspn(a.carrera, "\n")] = 0; }
+        if (token) strncpy(a.carrera, token, 29);
 
         token = strtok(NULL, ",\n");
         if (token) a.materias = atoi(token);
@@ -56,15 +39,15 @@ void leer_alumnos_csv() {
     fclose(archivo);
 }
 
-void guardar_alumnos_csv() {
-    FILE *archivo = fopen("../Ejercicio1/alumnos.csv", "w");
-    if (!archivo) {
-        perror("Error al abrir CSV para guardar");
-        return;
+/* Guarda el array 'alumnos' actual en el archivo */
+int guardar_alumnos_csv() {
+    FILE *f = fopen(RUTA_CSV, "w");
+    if (!f) {
+        perror("guardar_alumnos_csv: fopen");
+        return -1;
     }
-
     for (int i = 0; i < cantidad_alumnos; i++) {
-        fprintf(archivo, "%d,%d,%s,%s,%s,%d\n",
+        fprintf(f, "%d,%d,%s,%s,%s,%d\n",
                 alumnos[i].ID,
                 alumnos[i].DNI,
                 alumnos[i].nombre,
@@ -72,124 +55,80 @@ void guardar_alumnos_csv() {
                 alumnos[i].carrera,
                 alumnos[i].materias);
     }
-    fclose(archivo);
+    fclose(f);
+    return 0;
 }
 
-void procesar_consulta(int sock, const char* comando) {
-    char aux[BUFFER];
-    snprintf(aux, BUFFER, "%s", comando + 9); // "CONSULTA:"
-    aux[BUFFER-1] = 0;
+/* util: buscar por ID en array */
+int buscar_por_ID(t_alumno arr[], int cnt, int id) {
+    for (int i = 0; i < cnt; i++) if (arr[i].ID == id) return i;
+    return -1;
+}
 
-    char* campo = strtok(aux, "=");
-    char* valor = strtok(NULL, "=");
-    if (!campo || !valor) {
-        send(sock, "ERROR: formato de consulta\n", 28, 0);
-        return;
+/* lista el arreglo a un buffer (para enviar por socket) */
+void listar_a_buffer(t_alumno arr[], int cnt, char *out, size_t out_size) {
+    out[0] = '\0';
+    char linea[BUFFER];
+    for (int i = 0; i < cnt; i++) {
+        snprintf(linea, sizeof(linea),
+            "ID: %d\n- Nombre: %s\n- Apellido: %s\n- Carrera: %s\n- Materias: %d\n\n",
+            arr[i].ID, arr[i].nombre, arr[i].apellido, arr[i].carrera, arr[i].materias);
+        strncat(out, linea, out_size - strlen(out) - 1);
+        if (strlen(out) >= out_size - 100) break; /* seguridad */
     }
+    if (cnt == 0) strncat(out, "No hay alumnos registrados.\n", out_size - strlen(out) - 1);
+}
 
-    valor[strcspn(valor, "\n")] = 0;
+/* ALTA */
+int alta_en_array(t_alumno arr[], int *cnt, t_alumno a) {
+    if (*cnt >= MAX_ALUMNOS) return -1;
+    if (buscar_por_ID(arr, *cnt, a.ID) != -1) return -2; /* ID duplicado */
+    arr[*cnt] = a;
+    (*cnt)++;
+    return 0;
+}
 
-    char resultado[BUFFER*2];
-    resultado[0] = '\0';
+/* BAJA por ID */
+int baja_en_array(t_alumno arr[], int *cnt, int id) {
+    int idx = buscar_por_ID(arr, *cnt, id);
+    if (idx == -1) return -1;
+    arr[idx] = arr[(*cnt) - 1];
+    (*cnt)--;
+    return 0;
+}
 
-    for (int i = 0; i < cantidad_alumnos; i++) {
-        alumnos[i].nombre[strcspn(alumnos[i].nombre, "\n")] = 0;
-        alumnos[i].apellido[strcspn(alumnos[i].apellido, "\n")] = 0;
-        alumnos[i].carrera[strcspn(alumnos[i].carrera, "\n")] = 0;
+/* MODIFICAR: campo = NOMBRE/APELLIDO/CARRERA/MATERIAS */
+int modificar_en_array(t_alumno arr[], int cnt, int id, const char* campo, const char* valor) {
+    int idx = buscar_por_ID(arr, cnt, id);
+    if (idx == -1) return -1;
+    if (strcasecmp(campo, "NOMBRE") == 0) { strncpy(arr[idx].nombre, valor, 29); arr[idx].nombre[29]=0; }
+    else if (strcasecmp(campo, "APELLIDO") == 0) { strncpy(arr[idx].apellido, valor, 29); arr[idx].apellido[29]=0; }
+    else if (strcasecmp(campo, "CARRERA") == 0) { strncpy(arr[idx].carrera, valor, 29); arr[idx].carrera[29]=0; }
+    else if (strcasecmp(campo, "MATERIAS") == 0) arr[idx].materias = atoi(valor);
+    else return -2; /* campo inválido */
+    return 0;
+}
 
+/* CONSULTA simple: campo = ID/DNI/APELLIDO (igual que tu anterior) */
+void consulta_por_campo(t_alumno arr[], int cnt, const char* campo, const char* valor, char* out, size_t out_size) {
+    out[0] = '\0';
+    char linea[BUFFER];
+    for (int i = 0; i < cnt; i++) {
         int match = 0;
-        if (strcmpi(campo, "ID") == 1 && alumnos[i].ID == atoi(valor)) match = 1;
-        else if (strcmpi(campo, "DNI") == 1 && alumnos[i].DNI == atoi(valor)) match = 1;
-        else if (strcmpi(campo, "APELLIDO") == 1 && strcmpi(alumnos[i].apellido, valor) == 1) match = 1;
-
+        if (strcasecmp(campo, "ID") == 0) {
+            if (arr[i].ID == atoi(valor)) match = 1;
+        } else if (strcasecmp(campo, "DNI") == 0) {
+            if (arr[i].DNI == atoi(valor)) match = 1;
+        } else if (strcasecmp(campo, "APELLIDO") == 0) {
+            if (strcasecmp(arr[i].apellido, valor) == 0) match = 1;
+        }
         if (match) {
-            char linea[BUFFER];
-            snprintf(linea, BUFFER, "%d,%d,%s,%s,%s,%d\n",
-                     alumnos[i].ID, alumnos[i].DNI, alumnos[i].nombre,
-                     alumnos[i].apellido, alumnos[i].carrera, alumnos[i].materias);
-            strncat(resultado, linea, sizeof(resultado) - strlen(resultado) - 1);
+            snprintf(linea, sizeof(linea), "%d,%d,%s,%s,%s,%d\n",
+                     arr[i].ID, arr[i].DNI, arr[i].nombre,
+                     arr[i].apellido, arr[i].carrera, arr[i].materias);
+            strncat(out, linea, out_size - strlen(out) - 1);
         }
     }
-
-    if (strlen(resultado) == 0)
-        send(sock, "No se encontraron registros\n", 28, 0);
-    else
-        send(sock, resultado, strlen(resultado), 0);
+    if (strlen(out) == 0) strncat(out, "No se encontraron registros\n", out_size - strlen(out) - 1);
 }
-
-void procesar_alta(int sock, const char* comando) {
-    if (cantidad_alumnos >= MAX_ALUMNOS) {
-        send(sock, "ERROR: capacidad máxima alcanzada\n", 35, 0);
-        return;
-    }
-
-    t_alumnos a;
-    char aux[BUFFER];
-    snprintf(aux, BUFFER, "%s", comando + 5); // "ALTA:"
-    aux[BUFFER-1] = 0;
-
-    char* token = strtok(aux, ",");
-    while (token) {
-        char campo[50], valor[50];
-        sscanf(token, "%[^=]=%s", campo, valor);
-        valor[strcspn(valor, "\n")] = 0;
-
-        if (strcmpi(campo, "ID") == 1) a.ID = atoi(valor);
-        else if (strcmpi(campo, "DNI") == 1) a.DNI = atoi(valor);
-        else if (strcmpi(campo, "NOMBRE") == 1) { strncpy(a.nombre, valor, 30); a.nombre[29]=0; }
-        else if (strcmpi(campo, "APELLIDO") == 1) { strncpy(a.apellido, valor, 30); a.apellido[29]=0; }
-        else if (strcmpi(campo, "CARRERA") == 1) { strncpy(a.carrera, valor, 30); a.carrera[29]=0; }
-        else if (strcmpi(campo, "MATERIAS") == 1) a.materias = atoi(valor);
-
-        token = strtok(NULL, ",");
-    }
-
-    alumnos[cantidad_alumnos++] = a;
-    guardar_alumnos_csv();
-    send(sock, "OK: alumno dado de alta\n", 25, 0);
-}
-
-void procesar_baja(int sock, const char* comando) {
-    int id;
-    if (sscanf(comando, "BAJA:ID=%d", &id) != 1) {
-        send(sock, "ERROR: formato de comando inválido\n", 34, 0);
-        return;
-    }
-    int encontrado = 0;
-    for (int i = 0; i < cantidad_alumnos; i++) {
-        if (alumnos[i].ID == id) {
-            alumnos[i] = alumnos[cantidad_alumnos - 1];
-            cantidad_alumnos--;
-            guardar_alumnos_csv();
-            send(sock, "OK: alumno dado de baja\n", 25, 0);
-            encontrado = 1;
-            break;
-        }
-    }
-    if (!encontrado)
-        send(sock, "ERROR: ID no encontrado\n", 26, 0);
-}
-
-void procesar_modificar(int sock, const char* comando) {
-    int id;
-    char campo[50], valor[50];
-    sscanf(comando, "MODIFICAR:ID=%d,%[^=]=%s", &id, campo, valor);
-    valor[strcspn(valor, "\n")] = 0;
-
-    int encontrado = 0;
-    for (int i = 0; i < cantidad_alumnos; i++) {
-        if (alumnos[i].ID == id) {
-            if (strcmpi(campo, "NOMBRE") == 1) { strncpy(alumnos[i].nombre, valor, 30); alumnos[i].nombre[29]=0; }
-            else if (strcmpi(campo, "APELLIDO") == 1) { strncpy(alumnos[i].apellido, valor, 30); alumnos[i].apellido[29]=0; }
-            else if (strcmpi(campo, "CARRERA") == 1) { strncpy(alumnos[i].carrera, valor, 30); alumnos[i].carrera[29]=0; }
-            else if (strcmpi(campo, "MATERIAS") == 1) alumnos[i].materias = atoi(valor);
-
-            guardar_alumnos_csv();
-            send(sock, "OK: alumno modificado\n", 23, 0);
-            encontrado = 1;
-            break;
-        }
-    }
-    if (!encontrado)
-        send(sock, "ERROR: ID no encontrado\n", 26, 0);
-}
+/* FIN FUNCIONES */
