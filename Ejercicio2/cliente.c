@@ -29,12 +29,35 @@ int main(int argc, char* argv[]) {
     }
 
     char buf[BUFFER];
-    /* recibir bienvenida/espera */
+    /* recibir bienvenida / posible rechazo */
     int n = recv(sock, buf, BUFFER-1, 0);
-    if (n > 0) { buf[n]=0; printf("%s", buf); }
+    if (n <= 0) { perror("recv"); close(sock); return 1; }
+    buf[n] = '\0';
+    printf("%s", buf);
+    if (strstr(buf, "ERROR: servidor ocupado") != NULL) {
+        printf("Conexión rechazada por servidor (ocupado). Saliendo.\n");
+        close(sock);
+        return 0;
+    }
 
-    n = recv(sock, buf, BUFFER-1, 0);
-    if (n > 0) { buf[n]=0; printf("%s", buf); }
+    /* Si estamos en cola de espera, bloquear hasta recibir la notificación de atención */
+    if (strstr(buf, "en espera") != NULL && strstr(buf, "Ya está siendo atendido") == NULL) {
+        char tmp[BUFFER];
+        while ((n = recv(sock, tmp, BUFFER-1, 0)) > 0) {
+            tmp[n] = '\0';
+            printf("%s", tmp);
+            if (strstr(tmp, "Ya está siendo atendido") != NULL) break;
+        }
+        if (n <= 0) {
+            printf("Servidor cerró la conexión mientras esperaba. Saliendo.\n");
+            close(sock);
+            return 0;
+        }
+    } else if (strstr(buf, "Ya está siendo atendido") == NULL) {
+        /* en caso de que el servidor envíe el segundo mensaje en otro paquete */
+        int m = recv(sock, buf, BUFFER-1, 0);
+        if (m > 0) { buf[m]=0; printf("%s", buf); }
+    }
 
     printf("Conectado al servidor %s:%d\n", ip, puerto);
 

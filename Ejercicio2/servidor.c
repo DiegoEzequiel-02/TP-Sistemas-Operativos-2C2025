@@ -20,6 +20,10 @@ sem_t sem_concurrentes;
 pthread_mutex_t id_lock = PTHREAD_MUTEX_INITIALIZER;
 int siguiente_id = 1;
 
+/* contador de espera (M) */
+int waiting_count = 0;
+pthread_mutex_t waiting_lock = PTHREAD_MUTEX_INITIALIZER;
+
 /* ruta CSV (setear desde argv) -> utils.c usa csv_path global */
 void enviar_respuesta(int sock, const char* msg) {
     send(sock, msg, strlen(msg), 0);
@@ -28,7 +32,35 @@ void enviar_respuesta(int sock, const char* msg) {
 typedef struct {
     int sock;
     int id;
+    int wait_before; /* 0 = entra ya (slot tomado), 1 = espera y hará sem_wait */
 } cliente_info;
+
+void* manejar_cliente(void* arg);
+
+/* wrapper de hilo: maneja posible espera antes de atender, luego llama a manejar_cliente */
+void* thread_entry(void* arg) {
+    cliente_info *info = (cliente_info*)arg;
+    int sock = info->sock;
+
+    if (info->wait_before) {
+        /* cliente aceptado pero en cola de espera */
+        enviar_respuesta(sock, "Bienvenido. Está en espera, será atendido cuando haya espacio...\n");
+        /* bloquear hasta que haya slot */
+        sem_wait(&sem_concurrentes);
+        /* ya obtuvo slot: actualizar contador de espera */
+        pthread_mutex_lock(&waiting_lock);
+        waiting_count--;
+        pthread_mutex_unlock(&waiting_lock);
+        enviar_respuesta(sock, "Ya está siendo atendido por el servidor.\n");
+    } else {
+        /* slot ya fue obtenido por sem_trywait previamente */
+        enviar_respuesta(sock, "Bienvenido. Espere si hay muchos usuarios conectados...\n");
+        enviar_respuesta(sock, "Ya está siendo atendido por el servidor.\n");
+    }
+
+    /* ahora delegar en la rutina existente que espera recibir y liberar el sem al finalizar */
+    return manejar_cliente(info);
+}
 
 /* rutina del hilo cliente */
 void* manejar_cliente(void* arg) {
@@ -59,34 +91,42 @@ void* manejar_cliente(void* arg) {
 
         /* COMANDOS */
         if (strcasecmp(buf, "BEGIN TRANSACTION") == 0 || strcasecmp(buf, "BEGIN") == 0) {
-            /* intentar tomar el lock (no bloqueante para dar mensaje) */
-            if (pthread_mutex_trylock(&mutex_trans) == 0) {
+            int try = pthread_mutex_trylock(&mutex_trans);
+            printf("[DEBUG][Cliente %d] BEGIN trylock=%d (trans_lock_sock=%d)\n", id, try, trans_lock_sock);
+            fflush(stdout);
+            if (try == 0) {
                 trans_lock_sock = sock;
-                /* copiar datos globales a tmp */
                 memcpy(tmp_alumnos, alumnos, sizeof(alumnos));
                 tmp_cnt = cantidad_alumnos;
                 en_transaccion = 1;
                 enviar_respuesta(sock, "OK: transacción iniciada\n");
+                printf("[DEBUG][Cliente %d] lock tomado (sock=%d)\n", id, sock);
+                fflush(stdout);
             } else {
                 enviar_respuesta(sock, "ERROR: transacción activa por otro cliente\n");
+                printf("[DEBUG][Cliente %d] begin DENIED (lock ocupado por sock=%d)\n", id, trans_lock_sock);
+                fflush(stdout);
             }
         }
         else if (strcasecmp(buf, "COMMIT TRANSACTION") == 0 || strcasecmp(buf, "COMMIT") == 0) {
-            printf("[DEBUG] COMMIT desde cliente %d -> copiar tmp a global\n", id);
+            printf("[DEBUG][Cliente %d] COMMIT requested (en_transaccion=%d, trans_lock_sock=%d, sock=%d)\n", id, en_transaccion, trans_lock_sock, sock);
+            fflush(stdout);
             if (!en_transaccion || trans_lock_sock != sock) {
                 enviar_respuesta(sock, "ERROR: no posee transacción activa\n");
             } else {
-                /* copiar tmp -> global, guardar CSV */
                 memcpy(alumnos, tmp_alumnos, sizeof(alumnos));
                 cantidad_alumnos = tmp_cnt;
+                printf("[DEBUG][Cliente %d] copiando tmp->global y guardando CSV\n", id);
+                fflush(stdout);
                 if (guardar_alumnos_csv() == 0)
                     enviar_respuesta(sock, "OK: transacción confirmada\n");
                 else
                     enviar_respuesta(sock, "ERROR: fallo al guardar CSV\n");
-                /* liberar lock */
                 trans_lock_sock = 0;
                 pthread_mutex_unlock(&mutex_trans);
                 en_transaccion = 0;
+                printf("[DEBUG][Cliente %d] lock liberado\n", id);
+                fflush(stdout);
             }
         }
         else if (strcasecmp(buf, "SALIR") == 0 || strcasecmp(buf, "EXIT") == 0) {
@@ -215,6 +255,8 @@ void* manejar_cliente(void* arg) {
 
     /* cleanup: si se desconecta mientras tiene lock, liberar */
     if (en_transaccion && trans_lock_sock == sock) {
+        printf("[DEBUG][Cliente %d] desconecta con lock -> liberando\n", id);
+        fflush(stdout);
         trans_lock_sock = 0;
         pthread_mutex_unlock(&mutex_trans);
         printf("[Cliente %d] desconectado: lock liberado\n", id);
@@ -258,26 +300,51 @@ int main(int argc, char* argv[]) {
         struct sockaddr_in cliente;
         socklen_t tam = sizeof(cliente);
 
-        /* aceptar conexión (no bloquea semáforo todavía) */
         int sock = accept(server_fd, (struct sockaddr*)&cliente, &tam);
         if (sock < 0) continue;
 
-        /* esperar un slot disponible */
-        sem_wait(&sem_concurrentes);
+        /* intentar tomar un slot sin bloquear */
+        if (sem_trywait(&sem_concurrentes) == 0) {
+            /* slot disponible: crear hilo que atienda inmediatamente (wait_before=0) */
+            cliente_info *info = malloc(sizeof(cliente_info));
+            info->sock = sock;
+            pthread_mutex_lock(&id_lock);
+            info->id = siguiente_id++;
+            pthread_mutex_unlock(&id_lock);
+            info->wait_before = 0;
 
-        /* ahora atendemos: enviar mensaje y crear hilo */
-        send(sock, "Bienvenido. Espere si hay muchos usuarios conectados...\n", 55, 0);
-        send(sock, "Ya está siendo atendido por el servidor.\n", 39, 0);
+            pthread_t hilo;
+            pthread_create(&hilo, NULL, thread_entry, info);
+            pthread_detach(hilo);
+            /* NOTE: no hacemos sem_post aquí; el hilo llamará sem_post al finalizar */
+        } else {
+            /* no hay slot libre ahora; ver si hay espacio en cola de espera (waiting_count < M) */
+            pthread_mutex_lock(&waiting_lock);
+            if (waiting_count < M) {
+                waiting_count++;
+                pthread_mutex_unlock(&waiting_lock);
 
-        cliente_info *info = malloc(sizeof(cliente_info));
-        info->sock = sock;
-        pthread_mutex_lock(&id_lock);
-        info->id = siguiente_id++;
-        pthread_mutex_unlock(&id_lock);
+                /* crear hilo que esperará por sem_wait */
+                cliente_info *info = malloc(sizeof(cliente_info));
+                info->sock = sock;
+                pthread_mutex_lock(&id_lock);
+                info->id = siguiente_id++;
+                pthread_mutex_unlock(&id_lock);
+                info->wait_before = 1;
 
-        pthread_t hilo;
-        pthread_create(&hilo, NULL, manejar_cliente, info);
-        pthread_detach(hilo);
+                pthread_t hilo;
+                pthread_create(&hilo, NULL, thread_entry, info);
+                pthread_detach(hilo);
+            } else {
+                /* cola de espera también llena: rechazar */
+                pthread_mutex_unlock(&waiting_lock);
+                const char *msg = "ERROR: servidor ocupado, intente luego\n";
+                send(sock, msg, strlen(msg), 0);
+                shutdown(sock, SHUT_RDWR);
+                close(sock);
+                printf("[INFO] Rechazado cliente: servidor y cola llena\n");
+            }
+        }
     }
 
     close(server_fd);
