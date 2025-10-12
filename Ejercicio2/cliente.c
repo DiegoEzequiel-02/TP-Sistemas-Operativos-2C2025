@@ -6,6 +6,75 @@
 
 #define BUFFER 512
 
+static int recv_into_buf(int sock, char *buf, size_t bufsz) {
+    int n = recv(sock, buf, (int)bufsz - 1, 0);
+    if (n > 0) buf[n] = '\0';
+    return n;
+}
+
+static int recv_until_attention(int sock) {
+    char tmp[BUFFER];
+    int n;
+    while ((n = recv_into_buf(sock, tmp, sizeof(tmp))) > 0) {
+        printf("%s", tmp);
+        if (strstr(tmp, "Ya está siendo atendido") != NULL) return 1;
+        if (strstr(tmp, "ERROR: servidor ocupado") != NULL) return -1;
+    }
+    return 0; /* desconectado o error */
+}
+
+static int handle_initial_messages(int sock) {
+    char buf[BUFFER];
+    int n = recv_into_buf(sock, buf, sizeof(buf));
+    if (n <= 0) {
+        perror("recv");
+        return 0;
+    }
+    printf("%s", buf);
+    if (strstr(buf, "ERROR: servidor ocupado") != NULL) return -1;
+    if (strstr(buf, "en espera") != NULL && strstr(buf, "Ya está siendo atendido") == NULL) {
+        /* estamos en cola: esperar el aviso de atención */
+        int r = recv_until_attention(sock);
+        if (r <= 0) {
+            printf("Servidor cerró la conexión mientras esperaba. Saliendo.\n");
+            return 0;
+        }
+    } else if (strstr(buf, "Ya está siendo atendido") == NULL) {
+        /* puede venir el segundo mensaje en otro paquete */
+        int m = recv_into_buf(sock, buf, sizeof(buf));
+        if (m > 0) printf("%s", buf);
+    }
+    return 1;
+}
+
+static void enviar_comando_listar(int sock) {
+    char recvbuf[BUFFER];
+    int r;
+    while ((r = recv(sock, recvbuf, sizeof(recvbuf)-1, 0)) > 0) {
+        recvbuf[r] = '\0';
+        char *fin = strstr(recvbuf, "__FIN__");
+        if (fin) {
+            *fin = '\0';
+            printf("%s", recvbuf);
+            break;
+        }
+        printf("%s", recvbuf);
+    }
+    printf("\n");
+}
+
+static void enviar_comando_generico(int sock, const char *comando) {
+    char buf[BUFFER];
+    send(sock, comando, strlen(comando), 0);
+    int r = recv(sock, buf, sizeof(buf)-1, 0);
+    if (r > 0) {
+        buf[r] = '\0';
+        printf("%s", buf);
+    } else {
+        printf("Servidor desconectado.\n");
+    }
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         printf("Uso: %s <IP_servidor> <PUERTO>\n", argv[0]);
@@ -28,36 +97,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    char buf[BUFFER];
-    /* recibir bienvenida / posible rechazo */
-    int n = recv(sock, buf, BUFFER-1, 0);
-    if (n <= 0) { perror("recv"); close(sock); return 1; }
-    buf[n] = '\0';
-    printf("%s", buf);
-    if (strstr(buf, "ERROR: servidor ocupado") != NULL) {
-        printf("Conexión rechazada por servidor (ocupado). Saliendo.\n");
-        close(sock);
-        return 0;
-    }
-
-    /* Si estamos en cola de espera, bloquear hasta recibir la notificación de atención */
-    if (strstr(buf, "en espera") != NULL && strstr(buf, "Ya está siendo atendido") == NULL) {
-        char tmp[BUFFER];
-        while ((n = recv(sock, tmp, BUFFER-1, 0)) > 0) {
-            tmp[n] = '\0';
-            printf("%s", tmp);
-            if (strstr(tmp, "Ya está siendo atendido") != NULL) break;
-        }
-        if (n <= 0) {
-            printf("Servidor cerró la conexión mientras esperaba. Saliendo.\n");
-            close(sock);
-            return 0;
-        }
-    } else if (strstr(buf, "Ya está siendo atendido") == NULL) {
-        /* en caso de que el servidor envíe el segundo mensaje en otro paquete */
-        int m = recv(sock, buf, BUFFER-1, 0);
-        if (m > 0) { buf[m]=0; printf("%s", buf); }
-    }
+    int ok = handle_initial_messages(sock);
+    if (ok <= 0) { close(sock); return 0; }
 
     printf("Conectado al servidor %s:%d\n", ip, puerto);
 
@@ -78,73 +119,70 @@ int main(int argc, char* argv[]) {
         while (getchar() != '\n');
 
         char comando[BUFFER] = {0};
-        if (opcion == 0) {
-            strcpy(comando, "SALIR");
-            send(sock, comando, strlen(comando), 0);
-            break;
-        } else if (opcion == 1) strcpy(comando, "BEGIN TRANSACTION");
-        else if (opcion == 6) strcpy(comando, "COMMIT TRANSACTION");
-        else if (opcion == 7) strcpy(comando, "LISTAR");
-        else if (opcion == 2) {
-            char campo[50], valor[50];
-            printf("Campo a consultar (ID/DNI/APELLIDO): ");
-            fgets(campo, sizeof(campo), stdin); campo[strcspn(campo,"\n")]=0;
-            printf("Valor: ");
-            fgets(valor, sizeof(valor), stdin); valor[strcspn(valor,"\n")]=0;
-            snprintf(comando, sizeof(comando), "CONSULTA:%s=%s", campo, valor);
-        } else if (opcion == 3) {
-            int id,dni,materias; char nombre[30], apellido[30], carrera[30];
-            printf("ID: "); scanf("%d",&id); while(getchar()!='\n');
-            printf("DNI: "); scanf("%d",&dni); while(getchar()!='\n');
-            printf("Nombre: "); fgets(nombre,sizeof(nombre),stdin); nombre[strcspn(nombre,"\n")]=0;
-            printf("Apellido: "); fgets(apellido,sizeof(apellido),stdin); apellido[strcspn(apellido,"\n")]=0;
-            printf("Carrera: "); fgets(carrera,sizeof(carrera),stdin); carrera[strcspn(carrera,"\n")]=0;
-            printf("Materias: "); scanf("%d",&materias); while(getchar()!='\n');
-            snprintf(comando, sizeof(comando),
-                     "ALTA:ID=%d,DNI=%d,NOMBRE=%s,APELLIDO=%s,CARRERA=%s,MATERIAS=%d",
-                     id,dni,nombre,apellido,carrera,materias);
-        } else if (opcion == 4) {
-            int id; printf("ID a dar de baja: "); scanf("%d",&id); while(getchar()!='\n');
-            snprintf(comando, sizeof(comando), "BAJA:ID=%d", id);
-        } else if (opcion == 5) {
-            int id; char campo[30], valor[50];
-            printf("ID a modificar: "); scanf("%d",&id); while(getchar()!='\n');
-            printf("Campo a modificar (NOMBRE/APELLIDO/CARRERA/MATERIAS): ");
-            fgets(campo,sizeof(campo),stdin); campo[strcspn(campo,"\n")]=0;
-            printf("Nuevo valor: "); fgets(valor,sizeof(valor),stdin); valor[strcspn(valor,"\n")]=0;
-            snprintf(comando, sizeof(comando), "MODIFICAR:ID=%d,%s=%s", id, campo, valor);
-        } else {
-            printf("Opción inválida.\n");
-            continue;
-        }
 
-        /* enviar el comando y recibir respuesta (o múltiples paquetes) */
-        send(sock, comando, strlen(comando), 0);
-
-        /* si LISTAR, recibir hasta marcador __FIN__ */
-        if (strcmp(comando, "LISTAR") == 0) {
-            char recvbuf[BUFFER];
-            int r;
-            while ((r = recv(sock, recvbuf, sizeof(recvbuf)-1, 0)) > 0) {
-                recvbuf[r]=0;
-                if (strstr(recvbuf, "__FIN__") != NULL) {
-                    char *fin = strstr(recvbuf, "__FIN__");
-                    *fin = '\0';
-                    printf("%s", recvbuf);
-                    break;
-                }
-                printf("%s", recvbuf);
-            }
-            printf("\n");
-        } else {
-            int r = recv(sock, buf, sizeof(buf)-1, 0);
-            if (r > 0) {
-                buf[r]=0;
-                printf("%s", buf);
-            } else {
-                printf("Servidor desconectado.\n");
+        switch (opcion) {
+            case 0:
+                strcpy(comando, "SALIR");
+                send(sock, comando, strlen(comando), 0);
+                close(sock);
+                printf("Cliente finalizado.\n");
+                return 0;
+            case 1:
+                strcpy(comando, "BEGIN TRANSACTION");
+                enviar_comando_generico(sock, comando);
+                break;
+            case 2: {
+                char campo[50], valor[50];
+                printf("Campo a consultar (ID/DNI/APELLIDO): ");
+                fgets(campo, sizeof(campo), stdin); campo[strcspn(campo,"\n")]=0;
+                printf("Valor: ");
+                fgets(valor, sizeof(valor), stdin); valor[strcspn(valor,"\n")]=0;
+                snprintf(comando, sizeof(comando), "CONSULTA:%s=%s", campo, valor);
+                enviar_comando_generico(sock, comando);
                 break;
             }
+            case 3: {
+                int id,dni,materias;
+                char nombre[30], apellido[30], carrera[30];
+                printf("ID: "); scanf("%d",&id); while(getchar()!='\n');
+                printf("DNI: "); scanf("%d",&dni); while(getchar()!='\n');
+                printf("Nombre: "); fgets(nombre,sizeof(nombre),stdin); nombre[strcspn(nombre,"\n")]=0;
+                printf("Apellido: "); fgets(apellido,sizeof(apellido),stdin); apellido[strcspn(apellido,"\n")]=0;
+                printf("Carrera: "); fgets(carrera,sizeof(carrera),stdin); carrera[strcspn(carrera,"\n")]=0;
+                printf("Materias: "); scanf("%d",&materias); while(getchar()!='\n');
+                snprintf(comando, sizeof(comando),
+                         "ALTA:ID=%d,DNI=%d,NOMBRE=%s,APELLIDO=%s,CARRERA=%s,MATERIAS=%d",
+                         id,dni,nombre,apellido,carrera,materias);
+                enviar_comando_generico(sock, comando);
+                break;
+            }
+            case 4:
+                { int id; printf("ID a dar de baja: "); scanf("%d",&id); while(getchar()!='\n');
+                  snprintf(comando, sizeof(comando), "BAJA:ID=%d", id);
+                  enviar_comando_generico(sock, comando);
+                }
+                break;
+            case 5: {
+                int id; char campo[30], valor[50];
+                printf("ID a modificar: "); scanf("%d",&id); while(getchar()!='\n');
+                printf("Campo a modificar (NOMBRE/APELLIDO/CARRERA/MATERIAS): ");
+                fgets(campo,sizeof(campo),stdin); campo[strcspn(campo,"\n")]=0;
+                printf("Nuevo valor: "); fgets(valor,sizeof(valor),stdin); valor[strcspn(valor,"\n")]=0;
+                snprintf(comando, sizeof(comando), "MODIFICAR:ID=%d,%s=%s", id, campo, valor);
+                enviar_comando_generico(sock, comando);
+                break;
+            }
+            case 6:
+                strcpy(comando, "COMMIT TRANSACTION");
+                enviar_comando_generico(sock, comando);
+                break;
+            case 7:
+                strcpy(comando, "LISTAR");
+                send(sock, comando, strlen(comando), 0);
+                enviar_comando_listar(sock);
+                break;
+            default:
+                printf("Opción inválida.\n");
         }
     }
 

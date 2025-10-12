@@ -24,11 +24,6 @@ int siguiente_id = 1;
 int waiting_count = 0;
 pthread_mutex_t waiting_lock = PTHREAD_MUTEX_INITIALIZER;
 
-/* ruta CSV (setear desde argv) -> utils.c usa csv_path global */
-void enviar_respuesta(int sock, const char* msg) {
-    send(sock, msg, strlen(msg), 0);
-}
-
 typedef struct {
     int sock;
     int id;
@@ -36,6 +31,11 @@ typedef struct {
 } cliente_info;
 
 void* manejar_cliente(void* arg);
+
+/* ruta CSV (setear desde argv) -> utils.c usa csv_path global */
+void enviar_respuesta(int sock, const char* msg) {
+    send(sock, msg, strlen(msg), 0);
+}
 
 /* wrapper de hilo: maneja posible espera antes de atender, luego llama a manejar_cliente */
 void* thread_entry(void* arg) {
@@ -58,8 +58,13 @@ void* thread_entry(void* arg) {
         enviar_respuesta(sock, "Ya está siendo atendido por el servidor.\n");
     }
 
-    /* ahora delegar en la rutina existente que espera recibir y liberar el sem al finalizar */
-    return manejar_cliente(info);
+    /* delega en la rutina existente que maneja el cliente */
+    void *res = manejar_cliente(info);
+
+    /* manejar_cliente debe llamar sem_post al finalizar; si no, aseguramos */
+    // sem_post(&sem_concurrentes); 
+
+    return res;
 }
 
 /* rutina del hilo cliente */
@@ -307,6 +312,13 @@ int main(int argc, char* argv[]) {
         if (sem_trywait(&sem_concurrentes) == 0) {
             /* slot disponible: crear hilo que atienda inmediatamente (wait_before=0) */
             cliente_info *info = malloc(sizeof(cliente_info));
+            if (!info) {
+                perror("malloc");
+                /* devolver slot y cerrar socket */
+                sem_post(&sem_concurrentes);
+                close(sock);
+                continue;
+            }
             info->sock = sock;
             pthread_mutex_lock(&id_lock);
             info->id = siguiente_id++;
@@ -314,9 +326,16 @@ int main(int argc, char* argv[]) {
             info->wait_before = 0;
 
             pthread_t hilo;
-            pthread_create(&hilo, NULL, thread_entry, info);
+            int rc = pthread_create(&hilo, NULL, thread_entry, info);
+            if (rc != 0) {
+                perror("pthread_create");
+                free(info);
+                /* devolver slot porque no se creó el hilo */
+                sem_post(&sem_concurrentes);
+                close(sock);
+                continue;
+            }
             pthread_detach(hilo);
-            /* NOTE: no hacemos sem_post aquí; el hilo llamará sem_post al finalizar */
         } else {
             /* no hay slot libre ahora; ver si hay espacio en cola de espera (waiting_count < M) */
             pthread_mutex_lock(&waiting_lock);
@@ -324,8 +343,20 @@ int main(int argc, char* argv[]) {
                 waiting_count++;
                 pthread_mutex_unlock(&waiting_lock);
 
-                /* crear hilo que esperará por sem_wait */
                 cliente_info *info = malloc(sizeof(cliente_info));
+                if (!info) {
+                    perror("malloc");
+                    /* ajustar contador y rechazar */
+                    pthread_mutex_lock(&waiting_lock);
+                    waiting_count--;
+                    pthread_mutex_unlock(&waiting_lock);
+                    const char *msg = "ERROR: servidor ocupado, intente luego\n";
+                    send(sock, msg, strlen(msg), 0);
+                    shutdown(sock, SHUT_RDWR);
+                    close(sock);
+                    continue;
+                }
+
                 info->sock = sock;
                 pthread_mutex_lock(&id_lock);
                 info->id = siguiente_id++;
@@ -333,7 +364,20 @@ int main(int argc, char* argv[]) {
                 info->wait_before = 1;
 
                 pthread_t hilo;
-                pthread_create(&hilo, NULL, thread_entry, info);
+                int rc = pthread_create(&hilo, NULL, thread_entry, info);
+                if (rc != 0) {
+                    perror("pthread_create");
+                    free(info);
+                    /* ajustar contador de espera */
+                    pthread_mutex_lock(&waiting_lock);
+                    waiting_count--;
+                    pthread_mutex_unlock(&waiting_lock);
+                    const char *msg = "ERROR: servidor ocupado, intente luego\n";
+                    send(sock, msg, strlen(msg), 0);
+                    shutdown(sock, SHUT_RDWR);
+                    close(sock);
+                    continue;
+                }
                 pthread_detach(hilo);
             } else {
                 /* cola de espera también llena: rechazar */
@@ -349,5 +393,8 @@ int main(int argc, char* argv[]) {
 
     close(server_fd);
     sem_destroy(&sem_concurrentes);
+    pthread_mutex_destroy(&id_lock);
+    pthread_mutex_destroy(&waiting_lock);
+    pthread_mutex_destroy(&mutex_trans);
     return 0;
 }
