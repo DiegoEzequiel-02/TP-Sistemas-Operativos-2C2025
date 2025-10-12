@@ -10,13 +10,18 @@
 #include <pthread.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <semaphore.h>
+#include <signal.h>
 
-#define MAX_CLIENTES 100
 #define MAX_BUFFER 1024
 
 extern pthread_mutex_t mutex_transaccion;
 extern int transaccion_activa;
 extern int cliente_transaccion_fd;
+
+sem_t sem_concurrentes;
+int MAX_CONCURRENTES = 0;
+int server_fd_global = -1;
 
 typedef struct {
     int cliente_fd;
@@ -24,6 +29,15 @@ typedef struct {
     int total_locales;
     int en_transaccion;
 } TransaccionCliente;
+
+void cerrar_servidor(int sig) {
+    log_info("Señal %d recibida. Cerrando servidor...", sig);
+    if (server_fd_global >= 0) {
+        close(server_fd_global);
+    }
+    sem_destroy(&sem_concurrentes);
+    exit(EXIT_SUCCESS);
+}
 
 void copiar_registros_a_local(TransaccionCliente* tc) {
     for (int i = 0; i < total_registros; i++) {
@@ -55,7 +69,6 @@ void* manejar_cliente(void* arg) {
 
     while (1) {
         if (!tc.en_transaccion) {
-            // Menu principal
             const char* menu = "\nMenu:\n1 - Begin transaction\n0 - Salir\nElija opción: ";
             send(cliente_fd, menu, strlen(menu), 0);
 
@@ -83,7 +96,7 @@ void* manejar_cliente(void* arg) {
                 send(cliente_fd, msg, strlen(msg), 0);
             }
         } else {
-            // Menú transacción
+            // Menú de transacción
             const char* menu_tx = "\nMenu Transacción:\n1 - Consultar registro\n2 - Modificar registro\n3 - Eliminar registro\n4 - Commit transaction\n0 - Salir\nElija opción: ";
             send(cliente_fd, menu_tx, strlen(menu_tx), 0);
 
@@ -114,7 +127,6 @@ void* manejar_cliente(void* arg) {
                     const char* msg = "ERROR: Registro no encontrado.\n";
                     send(cliente_fd, msg, strlen(msg), 0);
                 } else {
-                    // Ciclo para modificar campos
                     Registro* reg = &tc.registros_locales[idx];
                     while (1) {
                         char menu_mod[256];
@@ -127,6 +139,7 @@ void* manejar_cliente(void* arg) {
                         buffer[bytes_leidos] = '\0';
                         trim_nueva_linea(buffer);
                         if (strcmp(buffer, "0") == 0) break;
+
                         const char* pedir_valor = "Ingrese nuevo valor: ";
                         send(cliente_fd, pedir_valor, strlen(pedir_valor), 0);
                         bytes_leidos = recv(cliente_fd, buffer, sizeof(buffer) -1, 0);
@@ -140,19 +153,9 @@ void* manejar_cliente(void* arg) {
                             case '3': strncpy(reg->apellido, buffer, sizeof(reg->apellido) -1); break;
                             case '4': strncpy(reg->carrera, buffer, sizeof(reg->carrera) -1); break;
                             case '5': strncpy(reg->materias, buffer, sizeof(reg->materias) -1); break;
-                            default: {
-                                int op = atoi(buffer);
-                                switch (op) {
-                                    case 1: strncpy(reg->dni, buffer, sizeof(reg->dni) -1); break;
-                                    case 2: strncpy(reg->nombre, buffer, sizeof(reg->nombre) -1); break;
-                                    case 3: strncpy(reg->apellido, buffer, sizeof(reg->apellido) -1); break;
-                                    case 4: strncpy(reg->carrera, buffer, sizeof(reg->carrera) -1); break;
-                                    case 5: strncpy(reg->materias, buffer, sizeof(reg->materias) -1); break;
-                                    default:
-                                        send(cliente_fd, "Opción inválida.\n", 17, 0);
-                                        break;
-                                }
-                            }
+                            default:
+                                send(cliente_fd, "Opción inválida.\n", 17, 0);
+                                break;
                         }
                     }
                     const char* msg = "Modificación aplicada en transacción local.\n";
@@ -175,11 +178,9 @@ void* manejar_cliente(void* arg) {
                     send(cliente_fd, msg, strlen(msg), 0);
                 }
             } else if (strcmp(buffer, "4") == 0) {
-                // Commit
                 pthread_mutex_lock(&mutex_transaccion);
 
                 if (cliente_transaccion_fd == cliente_fd && transaccion_activa) {
-                    // Aplicar cambios locales a registros globales
                     for (int i = 0; i < tc.total_locales; i++) {
                         Registro* reg_local = &tc.registros_locales[i];
                         int idx_global = -1;
@@ -192,11 +193,8 @@ void* manejar_cliente(void* arg) {
                         if (reg_local->activo) {
                             if (idx_global >= 0) {
                                 registros[idx_global] = *reg_local;
-                            } else {
-                                // Nuevo registro
-                                if (total_registros < MAX_REGISTROS) {
-                                    registros[total_registros++] = *reg_local;
-                                }
+                            } else if (total_registros < MAX_REGISTROS) {
+                                registros[total_registros++] = *reg_local;
                             }
                         } else if (idx_global >= 0) {
                             registros[idx_global].activo = 0;
@@ -234,18 +232,33 @@ void* manejar_cliente(void* arg) {
         cancelar_transaccion(cliente_fd);
     }
 
+    sem_post(&sem_concurrentes);
     pthread_exit(NULL);
 }
 
 void configurar_servidor(int argc, char* argv[]) {
-    if (argc < 2) {
-        fprintf(stderr, "Uso: %s <puerto>\n", argv[0]);
+    if (argc < 5) {
+        fprintf(stderr, "Uso: %s <IP> <PUERTO> <MAX_CONCURRENTES> <MAX_EN_ESPERA>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
-    int puerto = atoi(argv[1]);
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) {
+    const char* ip = argv[1];
+    int puerto = atoi(argv[2]);
+    int max_concurrentes = atoi(argv[3]);
+    int max_en_espera = atoi(argv[4]);
+
+    if (max_concurrentes <= 0 || max_en_espera <= 0) {
+        fprintf(stderr, "ERROR: <MAX_CONCURRENTES> y <MAX_EN_ESPERA> deben ser mayores que cero.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    signal(SIGINT, cerrar_servidor);
+
+    MAX_CONCURRENTES = max_concurrentes;
+    sem_init(&sem_concurrentes, 0, MAX_CONCURRENTES);
+
+    server_fd_global = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd_global < 0) {
         perror("Error creando socket");
         exit(EXIT_FAILURE);
     }
@@ -253,21 +266,22 @@ void configurar_servidor(int argc, char* argv[]) {
     struct sockaddr_in server_addr = {0};
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(puerto);
-    server_addr.sin_addr.s_addr = INADDR_ANY;
+    inet_pton(AF_INET, ip, &server_addr.sin_addr);
 
-    if (bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+    if (bind(server_fd_global, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("Error en bind");
-        close(server_fd);
+        close(server_fd_global);
         exit(EXIT_FAILURE);
     }
 
-    if (listen(server_fd, MAX_CLIENTES) < 0) {
+    if (listen(server_fd_global, max_en_espera) < 0) {
         perror("Error en listen");
-        close(server_fd);
+        close(server_fd_global);
         exit(EXIT_FAILURE);
     }
 
-    log_info("Servidor iniciado en puerto %d", puerto);
+    log_info("Servidor iniciado en %s:%d con %d clientes concurrentes y %d en espera",
+             ip, puerto, max_concurrentes, max_en_espera);
 
     while (1) {
         struct sockaddr_in client_addr;
@@ -275,20 +289,22 @@ void configurar_servidor(int argc, char* argv[]) {
         int* cliente_fd = malloc(sizeof(int));
         if (!cliente_fd) continue;
 
-        *cliente_fd = accept(server_fd, (struct sockaddr*)&client_addr, &addr_len);
+        *cliente_fd = accept(server_fd_global, (struct sockaddr*)&client_addr, &addr_len);
         if (*cliente_fd < 0) {
             perror("Error en accept");
             free(cliente_fd);
             continue;
         }
 
+        sem_wait(&sem_concurrentes);
+
         log_info("Cliente conectado: %s:%d",
-            inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+                 inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
         pthread_t hilo;
         pthread_create(&hilo, NULL, manejar_cliente, cliente_fd);
         pthread_detach(hilo);
     }
 
-    close(server_fd);
+    close(server_fd_global);
 }
