@@ -23,13 +23,6 @@ sem_t sem_concurrentes;
 int MAX_CONCURRENTES = 0;
 int server_fd_global = -1;
 
-typedef struct {
-    int cliente_fd;
-    Registro registros_locales[MAX_REGISTROS];
-    int total_locales;
-    int en_transaccion;
-} TransaccionCliente;
-
 void cerrar_servidor(int sig) {
     log_info("Señal %d recibida. Cerrando servidor...", sig);
     if (server_fd_global >= 0) {
@@ -54,6 +47,18 @@ int buscar_registro_local(TransaccionCliente* tc, int id) {
     }
     return -1;
 }
+
+void finalizar_cliente(TransaccionCliente* tc) {
+    if (tc->en_transaccion) {
+        cancelar_transaccion(tc->cliente_fd);
+    }
+    close(tc->cliente_fd);
+    sem_post(&sem_concurrentes);
+    pthread_exit(NULL);
+}
+
+// Declaración si no está en un header
+int confirmar_transaccion(int cliente_fd, Registro* registros_locales, int total_locales);
 
 void* manejar_cliente(void* arg) {
     int cliente_fd = *((int*)arg);
@@ -96,7 +101,6 @@ void* manejar_cliente(void* arg) {
                 send(cliente_fd, msg, strlen(msg), 0);
             }
         } else {
-            // Menú de transacción
             const char* menu_tx = "\nMenu Transacción:\n1 - Consultar registro\n2 - Modificar registro\n3 - Eliminar registro\n4 - Commit transaction\n0 - Salir\nElija opción: ";
             send(cliente_fd, menu_tx, strlen(menu_tx), 0);
 
@@ -111,8 +115,16 @@ void* manejar_cliente(void* arg) {
                 bytes_leidos = recv(cliente_fd, buffer, sizeof(buffer) -1, 0);
                 if (bytes_leidos <= 0) break;
                 buffer[bytes_leidos] = '\0';
+
+                if (!es_numero_valido(buffer)) {
+                    const char* msg = "ID inválido.\n";
+                    send(cliente_fd, msg, strlen(msg), 0);
+                    continue;
+                }
+
                 int id = atoi(buffer);
-                char* resp = consultar_registro(id);
+                char resp[MAX_LINEA];
+                consultar_registro(id, resp, sizeof(resp));
                 send(cliente_fd, resp, strlen(resp), 0);
 
             } else if (strcmp(buffer, "2") == 0) {
@@ -121,6 +133,13 @@ void* manejar_cliente(void* arg) {
                 bytes_leidos = recv(cliente_fd, buffer, sizeof(buffer) -1, 0);
                 if (bytes_leidos <= 0) break;
                 buffer[bytes_leidos] = '\0';
+
+                if (!es_numero_valido(buffer)) {
+                    const char* msg = "ID inválido.\n";
+                    send(cliente_fd, msg, strlen(msg), 0);
+                    continue;
+                }
+
                 int id = atoi(buffer);
                 int idx = buscar_registro_local(&tc, id);
                 if (idx < 0) {
@@ -129,7 +148,7 @@ void* manejar_cliente(void* arg) {
                 } else {
                     Registro* reg = &tc.registros_locales[idx];
                     while (1) {
-                        char menu_mod[256];
+                        char menu_mod[512];
                         snprintf(menu_mod, sizeof(menu_mod),
                             "\nModificar registro %d:\n1 - DNI (%s)\n2 - Nombre (%s)\n3 - Apellido (%s)\n4 - Carrera (%s)\n5 - Materias (%s)\n0 - Terminar\nElija campo a modificar: ",
                             reg->id, reg->dni, reg->nombre, reg->apellido, reg->carrera, reg->materias);
@@ -148,11 +167,11 @@ void* manejar_cliente(void* arg) {
                         trim_nueva_linea(buffer);
 
                         switch (buffer[0]) {
-                            case '1': strncpy(reg->dni, buffer, sizeof(reg->dni) -1); break;
-                            case '2': strncpy(reg->nombre, buffer, sizeof(reg->nombre) -1); break;
-                            case '3': strncpy(reg->apellido, buffer, sizeof(reg->apellido) -1); break;
-                            case '4': strncpy(reg->carrera, buffer, sizeof(reg->carrera) -1); break;
-                            case '5': strncpy(reg->materias, buffer, sizeof(reg->materias) -1); break;
+                            case '1': strncpy(reg->dni, buffer, sizeof(reg->dni) -1); reg->dni[sizeof(reg->dni)-1] = '\0'; break;
+                            case '2': strncpy(reg->nombre, buffer, sizeof(reg->nombre) -1); reg->nombre[sizeof(reg->nombre)-1] = '\0'; break;
+                            case '3': strncpy(reg->apellido, buffer, sizeof(reg->apellido) -1); reg->apellido[sizeof(reg->apellido)-1] = '\0'; break;
+                            case '4': strncpy(reg->carrera, buffer, sizeof(reg->carrera) -1); reg->carrera[sizeof(reg->carrera)-1] = '\0'; break;
+                            case '5': strncpy(reg->materias, buffer, sizeof(reg->materias) -1); reg->materias[sizeof(reg->materias)-1] = '\0'; break;
                             default:
                                 send(cliente_fd, "Opción inválida.\n", 17, 0);
                                 break;
@@ -161,12 +180,20 @@ void* manejar_cliente(void* arg) {
                     const char* msg = "Modificación aplicada en transacción local.\n";
                     send(cliente_fd, msg, strlen(msg), 0);
                 }
+
             } else if (strcmp(buffer, "3") == 0) {
                 const char* pedir_id = "Ingrese ID a eliminar: ";
                 send(cliente_fd, pedir_id, strlen(pedir_id), 0);
                 bytes_leidos = recv(cliente_fd, buffer, sizeof(buffer) -1, 0);
                 if (bytes_leidos <= 0) break;
                 buffer[bytes_leidos] = '\0';
+
+                if (!es_numero_valido(buffer)) {
+                    const char* msg = "ID inválido.\n";
+                    send(cliente_fd, msg, strlen(msg), 0);
+                    continue;
+                }
+
                 int id = atoi(buffer);
                 int idx = buscar_registro_local(&tc, id);
                 if (idx < 0) {
@@ -177,49 +204,28 @@ void* manejar_cliente(void* arg) {
                     const char* msg = "Registro eliminado en transacción local.\n";
                     send(cliente_fd, msg, strlen(msg), 0);
                 }
+
             } else if (strcmp(buffer, "4") == 0) {
                 pthread_mutex_lock(&mutex_transaccion);
 
                 if (cliente_transaccion_fd == cliente_fd && transaccion_activa) {
-                    for (int i = 0; i < tc.total_locales; i++) {
-                        Registro* reg_local = &tc.registros_locales[i];
-                        int idx_global = -1;
-                        for (int j = 0; j < total_registros; j++) {
-                            if (registros[j].id == reg_local->id) {
-                                idx_global = j;
-                                break;
-                            }
-                        }
-                        if (reg_local->activo) {
-                            if (idx_global >= 0) {
-                                registros[idx_global] = *reg_local;
-                            } else if (total_registros < MAX_REGISTROS) {
-                                registros[total_registros++] = *reg_local;
-                            }
-                        } else if (idx_global >= 0) {
-                            registros[idx_global].activo = 0;
-                        }
+                    if (confirmar_transaccion(cliente_fd, tc.registros_locales, tc.total_locales)) {
+                        const char* msg = "Commit realizado y transacción finalizada.\n";
+                        send(cliente_fd, msg, strlen(msg), 0);
+                        tc.en_transaccion = 0;
+                    } else {
+                        const char* msg = "ERROR: Falló el commit.\n";
+                        send(cliente_fd, msg, strlen(msg), 0);
                     }
-
-                    guardar_registros();
-                    finalizar_transaccion(cliente_fd);
-                    tc.en_transaccion = 0;
-
-                    const char* msg = "Commit realizado y transacción finalizada.\n";
-                    send(cliente_fd, msg, strlen(msg), 0);
                 } else {
                     const char* msg = "ERROR: No se puede hacer commit.\n";
                     send(cliente_fd, msg, strlen(msg), 0);
                 }
 
                 pthread_mutex_unlock(&mutex_transaccion);
+
             } else if (strcmp(buffer, "0") == 0) {
-                if (tc.en_transaccion) {
-                    cancelar_transaccion(cliente_fd);
-                }
-                const char* msg = "Desconectando...\n";
-                send(cliente_fd, msg, strlen(msg), 0);
-                break;
+                finalizar_cliente(&tc);
             } else {
                 const char* msg = "Opción no válida.\n";
                 send(cliente_fd, msg, strlen(msg), 0);
@@ -227,13 +233,8 @@ void* manejar_cliente(void* arg) {
         }
     }
 
-    close(cliente_fd);
-    if (tc.en_transaccion) {
-        cancelar_transaccion(cliente_fd);
-    }
-
-    sem_post(&sem_concurrentes);
-    pthread_exit(NULL);
+    finalizar_cliente(&tc);
+    return NULL;
 }
 
 void configurar_servidor(int argc, char* argv[]) {

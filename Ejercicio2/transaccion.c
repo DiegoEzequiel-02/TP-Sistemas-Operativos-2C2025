@@ -40,3 +40,19 @@ int puede_realizar_operacion(int cliente_fd) {
     pthread_mutex_unlock(&mutex_transaccion);
     return permitido;
 }
+
+int confirmar_transaccion(int cliente_fd, Registro* registros_locales, int total_locales) {
+    pthread_mutex_lock(&mutex_transaccion);
+    if (!transaccion_activa || cliente_transaccion_fd != cliente_fd) {
+        pthread_mutex_unlock(&mutex_transaccion);
+        return 0;
+    }
+
+    // Aquí deberías implementar la lógica para guardar registros locales
+    // Por ahora, solo finalizamos la transacción
+
+    transaccion_activa = 0;
+    cliente_transaccion_fd = -1;
+    pthread_mutex_unlock(&mutex_transaccion);
+    return 1;
+}

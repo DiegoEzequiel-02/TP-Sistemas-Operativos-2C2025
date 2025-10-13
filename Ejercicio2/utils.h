@@ -5,5 +5,6 @@ void log_info(const char* fmt, ...);
 void log_error(const char* fmt, ...);
 void configurar_signal_handler();
 char* trim_nueva_linea(char* str);
+int es_numero_valido(const char* str);
 
 #endif

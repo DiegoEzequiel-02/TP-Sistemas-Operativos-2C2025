@@ -1,8 +1,10 @@
 #ifndef CSV_H
 #define CSV_H
 
+#include <stddef.h>  // para size_t
+
 #define MAX_REGISTROS 1000
-#define MAX_LINEA 256
+#define MAX_LINEA 512
 
 typedef struct {
     int id;
@@ -18,9 +20,9 @@ extern Registro registros[MAX_REGISTROS];
 extern int total_registros;
 
 void cargar_registros();
-void guardar_registros();
+int guardar_registros();
 
-char* consultar_registro(int id);
+void consultar_registro(int id, char* respuesta, size_t tamaño);
 int agregar_registro(const char* linea_sin_id);
 int eliminar_registro(int id);
 int modificar_registro(int id, const Registro* nuevos_datos);

@@ -40,35 +40,37 @@ void cargar_registros() {
     fclose(f);
 }
 
-void guardar_registros() {
-    FILE* f = fopen(CSV_PATH, "w");
+int guardar_registros() {
+    FILE* f = fopen("registros.csv", "w");
     if (!f) {
-        perror("Error al escribir CSV");
-        return;
+        perror("Error al abrir archivo para guardar registros");
+        return 0;
     }
 
-    fprintf(f, "ID|DNI|Nombre|Apellido|Carrera|Materias|\n");
-
-    char linea[MAX_LINEA];
     for (int i = 0; i < total_registros; i++) {
         if (registros[i].activo) {
+            char linea[MAX_LINEA];
             registro_to_linea(&registros[i], linea);
-            fprintf(f, "%s", linea);
+            if (fputs(linea, f) == EOF) {
+                perror("Error al escribir en el archivo de registros");
+                fclose(f);
+                return 0;
+            }
         }
     }
 
     fclose(f);
+    return 1;
 }
 
-char* consultar_registro(int id) {
-    static char respuesta[MAX_LINEA];
+void consultar_registro(int id, char* respuesta, size_t tamaño) {
     for (int i = 0; i < total_registros; i++) {
         if (registros[i].activo && registros[i].id == id) {
             registro_to_linea(&registros[i], respuesta);
-            return respuesta;
+            return;
         }
     }
-    return "[✘] Registro no encontrado.\n";
+    snprintf(respuesta, tamaño, "[✘] Registro no encontrado.\n");
 }
 
 int agregar_registro(const char* linea_sin_id) {

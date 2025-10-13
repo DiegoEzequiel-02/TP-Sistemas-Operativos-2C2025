@@ -1,11 +1,10 @@
 #include "utils.h"
-#include "csv.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <signal.h>
 #include <string.h>
-#include <time.h>
+#include "csv.h"
 
 void log_info(const char* fmt, ...) {
     va_list args;
@@ -40,4 +39,12 @@ void configurar_signal_handler() {
 char* trim_nueva_linea(char* str) {
     str[strcspn(str, "\n")] = '\0';
     return str;
+}
+
+int es_numero_valido(const char* str) {
+    if (!str || *str == '\0') return 0;
+    for (size_t i = 0; str[i]; i++) {
+        if (str[i] < '0' || str[i] > '9') return 0;
+    }
+    return 1;
 }
