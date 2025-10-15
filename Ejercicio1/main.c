@@ -11,6 +11,7 @@
 #include <sys/sem.h>
 #include <sys/wait.h>
 #include <time.h>
+#include <errno.h>
 
 // #define REGISTROS_POR_GENERADOR 10
 // #define MAX_REGISTROS 1000
@@ -72,6 +73,7 @@ void generar_registro(Registro *reg, int id)
 void generador(int shm_id, int sem_id, int inicio_id, int cantidad)
 {
     Registro *reg = (Registro *)shmat(shm_id, NULL, 0);
+    if (reg == (void *)-1) { perror("shmat generador"); exit(1); }
     srand(getpid());
     for (int i = 0; i < cantidad; i++)
     {
@@ -93,10 +95,13 @@ void generador(int shm_id, int sem_id, int inicio_id, int cantidad)
 */
 void coordinador(int shm_id, int sem_id, int total_registros, int generadores)
 {
-    FILE *csv = fopen("./Ejercicio1/alumnos.csv", "w");
+    FILE *csv = fopen("alumnos.csv", "w"); /* archivo en el cwd */
+    if (!csv) { perror("fopen alumnos.csv"); exit(1); }
     fprintf(csv, "ID,DNI,Nombre,Apellido,Carrera,Materias\n");
 
     Registro *reg = (Registro *)shmat(shm_id, NULL, 0);
+    if (reg == (void *)-1) { perror("shmat coordinador"); fclose(csv); exit(1); }
+
     int recibidos = 0;
     while (recibidos < total_registros)
     {
@@ -136,10 +141,24 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    int shm_id = shmget(SHM_KEY, sizeof(Registro), IPC_CREAT | 0666);
+     int shm_id = shmget(SHM_KEY, sizeof(Registro), IPC_CREAT | 0666);
+    if (shm_id == -1) { perror("shmget"); return 1; }
+
     int sem_id = semget(SEM_KEY, 2, IPC_CREAT | 0666);
-    semctl(sem_id, 0, SETVAL, 1); // Generador puede escribir
-    semctl(sem_id, 1, SETVAL, 0); // Coordinador espera
+    if (sem_id == -1) { perror("semget"); shmctl(shm_id, IPC_RMID, NULL); return 1; }
+    
+/* union semun requerido por semctl */
+    union semun {
+        int val;
+        struct semid_ds *buf;
+        unsigned short *array;
+        struct seminfo *__buf;
+    } su;
+
+    su.val = 1;
+    semctl(sem_id, 0, SETVAL, su); // Generador puede escribir
+    su.val = 0;
+    semctl(sem_id, 1, SETVAL, su); // Coordinador espera
 
     pid_t coord_pid = fork();
     if (coord_pid == 0)
@@ -148,19 +167,6 @@ int main(int argc, char *argv[])
         exit(0);
     }
 
-    // int registros_por_gen = total_registros / generadores;
-    // int val = total_registros / generadores;
-    // int registros_por_gen = (val < 10) ? val : 10;
-    // int id_actual = 1;
-    // for (int i = 0; i < generadores; i++) {
-    //     pid_t gen_pid = fork();
-    //     if (gen_pid == 0) {
-    //         generador(shm_id, sem_id, id_actual, registros_por_gen);
-    //     }
-    //     id_actual += registros_por_gen;
-    // }
-
-    // ...existing code...
     int registros_por_gen = total_registros / generadores;
     int resto = total_registros % generadores;
     int id_actual = 1;
