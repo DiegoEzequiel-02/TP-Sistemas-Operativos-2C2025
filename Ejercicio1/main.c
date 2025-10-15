@@ -13,8 +13,6 @@
 #include <time.h>
 #include <errno.h>
 
-// #define REGISTROS_POR_GENERADOR 10
-// #define MAX_REGISTROS 1000
 #define SHM_KEY 0x1234
 #define SEM_KEY 0x5678
 
@@ -73,6 +71,8 @@ void generar_registro(Registro *reg, int id)
 void generador(int shm_id, int sem_id, int inicio_id, int cantidad)
 {
     Registro *reg = (Registro *)shmat(shm_id, NULL, 0);
+    // shmat coloca la memoria compartida en la memoria del proceso 
+    // para poder leer/escribir la estructura Registro que luego lee el coordinador.
     if (reg == (void *)-1) { perror("shmat generador"); exit(1); }
     srand(getpid());
     for (int i = 0; i < cantidad; i++)
@@ -80,8 +80,12 @@ void generador(int shm_id, int sem_id, int inicio_id, int cantidad)
         sem_wait(sem_id, 0); // Espera permiso para escribir
         generar_registro(reg, inicio_id + i);
         sem_signal(sem_id, 1); // Señala que hay registro listo
+
+        usleep(100000 + (rand() % 5000000)); // 0.1s a 5s
     }
     shmdt(reg);
+    //generador y coordinador llaman shmdt() cuando terminan de 
+    //usar la memoria compartida para liberar el mapping antes de exit().
     exit(0);
 }
 
@@ -108,9 +112,15 @@ void coordinador(int shm_id, int sem_id, int total_registros, int generadores)
         sem_wait(sem_id, 1); // Espera registro listo
         fprintf(csv, "%d,%d,%s,%s,%s,%d\n",
                 reg->id, reg->dni, reg->nombre, reg->apellido, reg->carrera, reg->materias);
+        /* Forzar flush al disco para que tail -f / ls muestren cambios */
+        fflush(csv);
+        fsync(fileno(csv));
 
         recibidos++;
         sem_signal(sem_id, 0); // Permite escribir al generador
+
+        /* opcional: breve sleep para visualizar consumo en htop/vmstat */
+        usleep(50000); // 50 ms
     }
     shmdt(reg);
     fclose(csv);
@@ -133,27 +143,37 @@ int main(int argc, char *argv[])
     }
     int generadores = atoi(argv[1]);
     int total_registros = atoi(argv[2]);
-    // if (generadores <= 0 || total_registros <= 0 || total_registros % generadores != 0)
-    printf("Generadores: %d| Registros: %d\n", generadores, total_registros);
+
+    printf("Generadores: %d | Registros: %d\n", generadores, total_registros);
     if (generadores <= 0 || total_registros <= 0)
     {
         printf("Parámetros inválidos. total_registros debe ser múltiplo de generadores.\n");
         return 1;
     }
 
-     int shm_id = shmget(SHM_KEY, sizeof(Registro), IPC_CREAT | 0666);
+    int shm_id = shmget(SHM_KEY, sizeof(Registro), IPC_CREAT | 0666);
     if (shm_id == -1) { perror("shmget"); return 1; }
+    /*
+    Crea/abre un segmento de memoria compartida con clave SHM_KEY y tamaño sizeof(Registro).
+    Flags: IPC_CREAT -> crear si no existe; 0666 -> permisos lectura/escritura para user/group/other.
+    Devuelve un identificador (shmid) >= 0 o -1 en error.*/
 
     int sem_id = semget(SEM_KEY, 2, IPC_CREAT | 0666);
     if (sem_id == -1) { perror("semget"); shmctl(shm_id, IPC_RMID, NULL); return 1; }
-    
+    /*Crea (o abre) un conjunto de 2 semáforos identificado por SEM_KEY.
+    El segundo argumento (=2) indica que el conjunto tendrá dos semáforos (índices 0 y 1).
+    Flags iguales a shmget (crear si hace falta, permisos 0666).
+    Devuelve el id del conjunto de semáforos o -1 en error.*/
+
 /* union semun requerido por semctl */
     union semun {
-        int val;
-        struct semid_ds *buf;
-        unsigned short *array;
-        struct seminfo *__buf;
-    } su;
+        int val; // usado para SETVAL/GETVAL (valor de un semáforo)
+        struct semid_ds *buf; // usado con IPC_STAT / IPC_SET para info del conjunto
+        unsigned short *array; // usado con GETALL / SETALL (valores de todos los semáforos)
+        struct seminfo *__buf; // usado por IPC_INFO / SEM_INFO (raro, implementación/so específica)
+    } su; //declara una variable llamada su de ese tipo; 
+    //el código la usa como contenedor para pasar parámetros a semctl 
+    //(por ejemplo su.val = 1; semctl(sem_id, 0, SETVAL, su);).
 
     su.val = 1;
     semctl(sem_id, 0, SETVAL, su); // Generador puede escribir
@@ -182,10 +202,18 @@ int main(int argc, char *argv[])
 
     for (int i = 0; i < generadores + 1; i++)
         wait(NULL);
-// ...existing code...
 
     shmctl(shm_id, IPC_RMID, NULL);
+    /*
+    Si hay procesos aún adjuntos, el segmento se eliminará 
+    cuando el último proceso haga shmdt; si no hay adjuntos, 
+    se elimina de inmediato.
+    */
     semctl(sem_id, 0, IPC_RMID);
+    /*
+    Elimina el conjunto de semáforos identificado por sem_id 
+    (libera el recurso en el kernel).
+    */
 
     printf("Generación finalizada. Ver alumnos.csv\n");
     return 0;
