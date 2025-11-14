@@ -1,7 +1,3 @@
-//COMPILAR: gcc main.c -o cliente
-//gcc servidor.c funcion.c -o servidor -lpthread
-//gcc cliente.c -o cliente
-//gcc main.c funcion.c -o cliente
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

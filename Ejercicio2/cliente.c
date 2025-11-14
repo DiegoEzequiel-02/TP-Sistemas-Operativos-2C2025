@@ -156,12 +156,23 @@ int main(int argc, char* argv[]) {
                 enviar_comando_generico(sock, comando);
                 break;
             }
-            case 4:
-                { int id; printf("ID a dar de baja: "); scanf("%d",&id); while(getchar()!='\n');
-                  snprintf(comando, sizeof(comando), "BAJA:ID=%d", id);
-                  enviar_comando_generico(sock, comando);
+            case 4: {
+                int id;
+                printf("ID a dar de baja: ");
+                if (scanf("%d", &id) == 1) {
+                    /* limpiar resto de la línea */
+                    int c;
+                    while ((c = getchar()) != '\n' && c != EOF) { }
+                    snprintf(comando, sizeof(comando), "BAJA:ID=%d", id);
+                    enviar_comando_generico(sock, comando);
+                } else {
+                    /* entrada inválida: limpiar buffer y avisar */
+                    int c;
+                    while ((c = getchar()) != '\n' && c != EOF) { }
+                    printf("ID inválido.\n");
                 }
                 break;
+            }
             case 5: {
                 int id; char campo[30], valor[50];
                 printf("ID a modificar: "); scanf("%d",&id); while(getchar()!='\n');
