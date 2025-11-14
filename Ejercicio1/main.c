@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <errno.h>
+#include <signal.h> 
 
 #define SHM_KEY 0x1234
 #define SEM_KEY 0x5678
@@ -29,6 +30,27 @@ typedef struct
 const char *nombres[] = {"Juan", "Ana", "Luis", "Maria", "Pedro"};
 const char *apellidos[] = {"Perez", "Gomez", "Lopez", "Diaz", "Fernandez"};
 const char *carreras[] = {"Ingenieria", "Medicina", "Derecho", "Arquitectura", "Economia"};
+static int g_shm_id = -1;
+static int g_sem_id = -1;
+
+/* handler simple que marca IPC para eliminación y sale */
+static void cleanup_and_exit(int sig)
+{
+    (void)sig;
+    if (g_shm_id != -1) {
+        if (shmctl(g_shm_id, IPC_RMID, NULL) == -1)
+            perror("shmctl IPC_RMID");
+        else
+            fprintf(stderr, "shmctl: marcado shm %d para eliminación\n", g_shm_id);
+    }
+    if (g_sem_id != -1) {
+        if (semctl(g_sem_id, 0, IPC_RMID) == -1)
+            perror("semctl IPC_RMID");
+        else
+            fprintf(stderr, "semctl: eliminado sem %d\n", g_sem_id);
+    }
+    _exit(1);
+}
 
 // Semáforo: 0 = generador puede escribir, 1 = coordinador puede leer
 /*Bloquea el proceso hasta que el semáforo num del conjunto semid
@@ -165,6 +187,11 @@ int main(int argc, char *argv[])
     El segundo argumento (=2) indica que el conjunto tendrá dos semáforos (índices 0 y 1).
     Flags iguales a shmget (crear si hace falta, permisos 0666).
     Devuelve el id del conjunto de semáforos o -1 en error.*/
+
+    g_shm_id = shm_id;
+    g_sem_id = sem_id;
+    signal(SIGINT, cleanup_and_exit);
+    signal(SIGTERM, cleanup_and_exit);
 
 /* union semun requerido por semctl */
     union semun {
