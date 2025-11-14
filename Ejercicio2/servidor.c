@@ -75,7 +75,13 @@ void* manejar_cliente(void* arg) {
     free(info);
 
     /* cada hilo tendrá su copia temporal para transacciones */
-    t_alumno tmp_alumnos[MAX_ALUMNOS];
+    t_alumno *tmp_alumnos = malloc(sizeof(t_alumno) * MAX_ALUMNOS);
+    if (!tmp_alumnos) {
+        perror("malloc tmp_alumnos");
+        close(sock);
+        sem_post(&sem_concurrentes);
+        return NULL;
+    }
     int tmp_cnt = 0;
     int en_transaccion = 0;
 
@@ -267,6 +273,8 @@ void* manejar_cliente(void* arg) {
         printf("[Cliente %d] desconectado: lock liberado\n", id);
     }
 
+    /* liberar recursos una vez */
+    free(tmp_alumnos);
     close(sock);
     sem_post(&sem_concurrentes);
     printf("[Cliente %d] hilo finalizado\n", id);
@@ -282,7 +290,10 @@ int main(int argc, char* argv[]) {
     int puerto = atoi(argv[2]);
     int N = atoi(argv[3]);
     int M = atoi(argv[4]);
-    if (argc >= 6) strncpy(RUTA_CSV, argv[5], sizeof(RUTA_CSV)-1);
+    if (argc >= 6) {
+        strncpy(RUTA_CSV, argv[5], sizeof(RUTA_CSV) - 1);
+        RUTA_CSV[sizeof(RUTA_CSV) - 1] = '\0';
+    }
 
     leer_alumnos_csv();
 

@@ -6,7 +6,7 @@
 #define MAX_ALUMNOS 200
 #define MAX_LINEA 256
 #define BUFFER 512
-#define RUTA_CSV "../Ejercicio1/alumnos.csv"
+extern char RUTA_CSV[256];
 
 typedef struct {
     int ID;

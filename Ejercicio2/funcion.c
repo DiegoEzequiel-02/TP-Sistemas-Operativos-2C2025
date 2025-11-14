@@ -4,6 +4,7 @@
 
 t_alumno alumnos[MAX_ALUMNOS];
 int cantidad_alumnos = 0;
+char RUTA_CSV[256] = "alumnos.csv";
 
 /* Lee CSV a 'alumnos' (simple, asume formato: ID,DNI,NOMBRE,APELLIDO,CARRERA,MATERIAS) */
 void leer_alumnos_csv() {
