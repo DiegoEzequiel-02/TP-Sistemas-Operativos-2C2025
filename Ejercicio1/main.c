@@ -107,6 +107,7 @@ void coordinador(int shm_id, int sem_id, int total_registros, int generadores)
     if (reg == (void *)-1) { perror("shmat coordinador"); fclose(csv); exit(1); }
 
     int recibidos = 0;
+    (void)generadores;
     while (recibidos < total_registros)
     {
         sem_wait(sem_id, 1); // Espera registro listo
