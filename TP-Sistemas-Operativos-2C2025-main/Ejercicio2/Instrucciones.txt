@@ -1,0 +1,13 @@
+Compilar el servidor:
+gcc servidor.c funcion.c -o servidor -lpthread
+
+Compilar el cliente:
+gcc cliente.c -o cliente
+
+Ejecutar el servidor en una terminal
+./servidor <IP> <PUERTO> <N_concurrentes> <M_espera>
+Ejemplo: ./servidor 127.0.0.1 8000 5 10
+
+Ejecutar el cliente en otra terminal
+./cliente <IP> <PUERTO>
+./cliente 127.0.0.1 8000
